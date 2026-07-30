@@ -1,0 +1,25 @@
+# Perfil de teste (Testcontainers).
+# O datasource NAO e declarado aqui: o Postgres real vem do container via
+# @ServiceConnection na classe de teste, e o Spring injeta url/user/senha dinamicos.
+
+spring:
+  jpa:
+    hibernate:
+      ddl-auto: validate       # schema criado pela migration Flyway no container
+    show-sql: true
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+
+security:
+  jwt:
+    # segredo fixo so-para-teste (min. 256 bits para HS256)
+    secret: test-only-secret-nao-usar-em-producao-0123456789-abcdefghijklmnop
+    access-expiration: 900000
+    refresh-expiration: 604800000
+  cookie:
+    secure: false
+
+app:
+  cors:
+    allowed-origin: http://localhost:4200

@@ -1,1 +1,37 @@
-spring.application.name=ecommercie
+server:
+  port: 8080
+
+spring:
+  application:
+    name: ecommercie
+  datasource:
+    url: jdbc:postgresql://localhost:5432/ecommercie
+    username: postgres
+    password: 2007
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+  flyway:
+    enabled: false
+    locations: classpath:db/migration
+
+
+security:
+  jwt:
+    # DEV: default descartavel (nao e o segredo real). Producao sobrescreve via JWT_SECRET.
+    secret: ${JWT_SECRET:dev-only-secret-troque-em-producao-use-JWT_SECRET-do-env-0123456789}
+    access-expiration: 900000
+    refresh-expiration: 604800000
+  cookie:
+    secure: false
+
+app:
+  cors:
+    allowed-origin: ${CORS_ORIGIN:http://localhost:4200}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
