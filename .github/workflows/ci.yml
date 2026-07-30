@@ -22,7 +22,7 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
-          cache: maven st
+          cache: maven
 
       - name: Make mvnw executable
         run: chmod +x mvnw
