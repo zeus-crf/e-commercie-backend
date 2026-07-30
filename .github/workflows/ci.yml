@@ -1,0 +1,33 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+# cancela runs antigos do mesmo branch quando um novo push chega
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-test:
+    name: Build & Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven st
+
+      - name: Make mvnw executable
+        run: chmod +x mvnw
+
+      # O runner ubuntu-latest ja tem Docker rodando, entao os testes
+      # com Testcontainers (Postgres) funcionam sem configuracao extra.
+      - name: Build and test
+        run: ./mvnw -B clean verify
