@@ -11,6 +11,11 @@ import java.math.BigDecimal;
 
 public interface ProductRepository extends JpaRepository<Product, String> {
 
+    @Override
+    Page<Product> findAll(Pageable pageable);
+
+    boolean existsByNomeIgnoreCase(String nome);
+
     Page<Product> findByNomeContainingIgnoreCase(String nome, Pageable pageable);
 
     Page<Product> findAllByCategoryId(String categoryId, Pageable pageable);

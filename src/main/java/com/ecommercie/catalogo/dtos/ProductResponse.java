@@ -20,6 +20,8 @@ public record ProductResponse(
         String origem
 ) {
 
+
+
     public static ProductResponse from (Product product) {
         return new ProductResponse(
                 product.getId(),
