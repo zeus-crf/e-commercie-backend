@@ -1,16 +1,22 @@
 package com.ecommercie.catalogo.service;
 
+import com.ecommercie.catalogo.dtos.CategoryRequest;
+import com.ecommercie.catalogo.dtos.CategoryResponse;
 import com.ecommercie.catalogo.dtos.ProductRequest;
 import com.ecommercie.catalogo.dtos.ProductResponse;
+import com.ecommercie.catalogo.models.Category;
 import com.ecommercie.catalogo.models.Product;
+import com.ecommercie.catalogo.models.ProductImage;
 import com.ecommercie.catalogo.repository.CategoryRepository;
 import com.ecommercie.catalogo.repository.ProductRepository;
+import com.ecommercie.catalogo.storage.StorageService;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 @Service
 @RequiredArgsConstructor
@@ -19,6 +25,8 @@ public class CatalogService {
     private final ProductRepository productRepository;
     private final CategoryRepository categoryRepository;
 
+    private final StorageService storageService;
+
     @Transactional(readOnly = true)
     public Page<ProductResponse> listProducts(Pageable pageable) {
         return productRepository.buscar(null, null, null, null, true, pageable)
@@ -26,7 +34,7 @@ public class CatalogService {
     }
 
     @Transactional(readOnly = true)
-    public ProductResponse listById(String productId) {
+    public ProductResponse listByIdProduct(String productId) {
         return productRepository.findById(productId)
                 .map(ProductResponse::from)
                 .orElseThrow(() -> new EntityNotFoundException("Produto não encontrado"));
@@ -89,5 +97,102 @@ public class CatalogService {
     @Transactional
     public void deleteProduct(String productId) {
         productRepository.deleteById(productId);
+    }
+
+    @Transactional(readOnly = true)
+    public Page<CategoryResponse> listCategory(Pageable pageable) {
+        return categoryRepository.findAll(pageable)
+                .map(CategoryResponse::from);
+    }
+
+    @Transactional(readOnly = true)
+    public CategoryResponse listByIdCategory(String categoryId) {
+        return categoryRepository.findById(categoryId)
+                .map(CategoryResponse::from)
+                .orElseThrow(() -> new EntityNotFoundException("Categoria não encontrada"));
+    }
+
+
+    @Transactional
+    public CategoryResponse createCategory(CategoryRequest request) {
+
+        if (categoryRepository.existsByNomeIgnoreCase(request.nome())){
+            throw new IllegalArgumentException("Essa categoria já existe");
+        }
+
+        if (categoryRepository.existsBySlugIgnoreCase(request.slug())){
+            throw new IllegalArgumentException("Esse slug já existe");
+        }
+
+
+
+        Category category = Category.builder()
+                .nome(request.nome())
+                .slug(request.slug())
+                .build();
+
+        categoryRepository.save(category);
+
+        return CategoryResponse.from(category);
+
+    }
+
+    @Transactional
+    public CategoryResponse editCategory(String categoryId,CategoryRequest request) {
+        var category  = categoryRepository.findById(categoryId)
+                .orElseThrow(() -> new EntityNotFoundException("Essa categoria não existe"));
+
+        if (request.nome() != null) category.setNome(request.nome());
+        if (request.slug() != null) category.setSlug(request.slug());
+
+        categoryRepository.save(category);
+
+        return CategoryResponse.from(category);
+    }
+
+    @Transactional
+    public void deleteCategory(String categoryId) {
+        if (productRepository.existsByCategoryId(categoryId)) {
+            throw new IllegalArgumentException("Categoria com produtos não pode ser excluída");
+        }
+        categoryRepository.deleteById(categoryId);
+    }
+
+    @Transactional
+    public ProductResponse adicionarImagem(String productId, MultipartFile arquivo) {
+
+        var product = productRepository.findById(productId)
+                .orElseThrow(() -> new EntityNotFoundException("Produto não encontrado"));
+
+
+        var url = storageService.store(arquivo);
+
+        int proximaOrdem = product.getImagens().size();
+
+        ProductImage imagem = ProductImage.builder()
+                .product(product)
+                .ordem(proximaOrdem)
+                .url(url)
+                .build();
+
+        product.getImagens().add(imagem);
+
+        return ProductResponse.from(product);
+    }
+
+    @Transactional
+    public ProductResponse deletarImagem(String productId, String url) {
+        var product = productRepository.findById(productId)
+                .orElseThrow(() -> new EntityNotFoundException("Produto não encontrado"));
+
+        var imagem = product.getImagens().stream()
+                .filter(img -> img.getUrl().equals(url))
+                .findFirst()
+                .orElseThrow(() -> new EntityNotFoundException("A imagem não foi encontrada"));
+
+        storageService.delete(imagem.getUrl());
+        product.getImagens().remove(imagem);
+
+        return ProductResponse.from(product);
     }
 }

@@ -39,4 +39,6 @@ public interface ProductRepository extends JpaRepository<Product, String> {
                          @Param("maxPreco") BigDecimal maxPreco,
                          @Param("apenasAtivos") boolean apenasAtivos,
                          Pageable pageable);
+
+    boolean existsByCategoryId(String categoryId);
 }
