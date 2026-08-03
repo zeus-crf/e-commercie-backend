@@ -5,6 +5,8 @@ import jakarta.persistence.*;
 import lombok.*;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Table(name = "produtos")
@@ -28,7 +30,7 @@ public class Product extends BaseEntity {
     @Column(nullable = false)
     private boolean ativo = true;
 
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "category_id", nullable = false)
     private Category category;
 
@@ -44,6 +46,11 @@ public class Product extends BaseEntity {
 
     @Column(name = "comprimento_cm", nullable = false)
     private BigDecimal comprimentoCm;
+
+    @OneToMany(mappedBy = "product", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OrderBy("ordem ASC")
+    @Builder.Default
+    private List<ProductImage> imagens =new ArrayList<>();
 
     // fiscais (NF-e, Fase 10) - preenchidos por padrao, mas nullable por ora
     private String ncm;
