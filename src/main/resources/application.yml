@@ -35,3 +35,7 @@ management:
     web:
       exposure:
         include: health
+storage:
+  local:
+    dir: uploads                          # pasta onde salva (relativa ao projeto)
+  public-url: http://localhost:8080/files # base da URL devolvida
