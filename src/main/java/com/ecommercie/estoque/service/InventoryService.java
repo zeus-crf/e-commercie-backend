@@ -66,6 +66,18 @@ public class InventoryService {
         inventoryItemRepository.save(item);
     }
 
+    @Transactional
+    public void ajustarEstoque(String productId, int estoque) {
+        var item = inventoryItemRepository.lockForUpdate(productId)
+                .orElseThrow(() -> new EntityNotFoundException("Produto não encontrado"));
+
+        if (item.getReservada() > estoque) {
+            throw new IllegalArgumentException("O estoque não pode ser menor que o já reservado");
+        }
+
+        item.setDisponivel(estoque);
+    }
+
 
 
 }
