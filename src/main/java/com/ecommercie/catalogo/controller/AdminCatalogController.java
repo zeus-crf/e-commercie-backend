@@ -8,6 +8,7 @@ import com.ecommercie.catalogo.service.CatalogService;
 import com.ecommercie.shared.ApiResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;

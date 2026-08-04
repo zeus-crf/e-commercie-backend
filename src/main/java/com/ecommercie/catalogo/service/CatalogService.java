@@ -137,6 +137,12 @@ public class CatalogService {
 
     }
 
+    @Transactional(readOnly = true)
+    public Page<CategoryResponse> findAllCategory(Pageable pageable) {
+        return categoryRepository.findAll(pageable)
+                .map(CategoryResponse::from);
+    }
+
     @Transactional
     public CategoryResponse editCategory(String categoryId,CategoryRequest request) {
         var category  = categoryRepository.findById(categoryId)
