@@ -27,10 +27,10 @@ public interface ProductRepository extends JpaRepository<Product, String> {
      */
     @Query("""
             SELECT p FROM Product p
-            WHERE (:q IS NULL OR LOWER(p.nome) LIKE LOWER(CONCAT('%', :q, '%')))
-              AND (:categoryId IS NULL OR p.category.id = :categoryId)
-              AND (:minPreco IS NULL OR p.preco >= :minPreco)
-              AND (:maxPreco IS NULL OR p.preco <= :maxPreco)
+            WHERE (CAST(:q AS string) IS NULL OR LOWER(p.nome) LIKE LOWER(CONCAT('%', CAST(:q AS string), '%')))
+              AND (CAST(:categoryId AS string) IS NULL OR p.category.id = :categoryId)
+              AND (CAST(:minPreco AS big_decimal) IS NULL OR p.preco >= :minPreco)
+              AND (CAST(:maxPreco AS big_decimal) IS NULL OR p.preco <= :maxPreco)
               AND (:apenasAtivos = FALSE OR p.ativo = TRUE)
             """)
     Page<Product> buscar(@Param("q") String q,
