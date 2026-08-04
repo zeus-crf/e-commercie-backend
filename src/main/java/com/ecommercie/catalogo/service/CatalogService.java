@@ -10,6 +10,7 @@ import com.ecommercie.catalogo.models.ProductImage;
 import com.ecommercie.catalogo.repository.CategoryRepository;
 import com.ecommercie.catalogo.repository.ProductRepository;
 import com.ecommercie.catalogo.storage.StorageService;
+import com.ecommercie.estoque.service.InventoryService;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -24,6 +25,8 @@ public class CatalogService {
 
     private final ProductRepository productRepository;
     private final CategoryRepository categoryRepository;
+
+    private final InventoryService inventoryService;
 
     private final StorageService storageService;
 
@@ -63,7 +66,11 @@ public class CatalogService {
                 .origem(request.origem())
                 .build();
 
+
+
         productRepository.save(product);
+
+        inventoryService.criarZerado(product);
 
         return ProductResponse.from(product);
     }

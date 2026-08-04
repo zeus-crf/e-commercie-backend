@@ -1,5 +1,6 @@
 package com.ecommercie.catalogo.models;
 
+import com.ecommercie.estoque.model.InventoryItem;
 import com.ecommercie.shared.BaseEntity;
 import jakarta.persistence.*;
 import lombok.*;
@@ -51,6 +52,9 @@ public class Product extends BaseEntity {
     @OrderBy("ordem ASC")
     @Builder.Default
     private List<ProductImage> imagens =new ArrayList<>();
+
+    @OneToOne(mappedBy = "product", cascade = CascadeType.ALL, orphanRemoval = true)
+    private InventoryItem inventoryItem;
 
     // fiscais (NF-e, Fase 10) - preenchidos por padrao, mas nullable por ora
     private String ncm;
