@@ -24,8 +24,8 @@ public class Order extends BaseEntity {
     private User user;
 
     @ManyToOne
-    @JoinColumn(name = "adress_id", nullable = false)
-    private Address  adress;
+    @JoinColumn(name = "endereco_id", nullable = false)
+    private Address address;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false)

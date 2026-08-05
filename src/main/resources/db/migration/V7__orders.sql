@@ -1,18 +1,20 @@
 CREATE TABLE endereco (
-id          VARCHAR(36)     NOT NULL PRIMARY KEY,
-logradouro  VARCHAR(200)    NOT NULL,
-numero      VARCHAR(10)     NOT NULL,
-bairro      VARCHAR(100)    NOT NULL,
-cidade      VARCHAR(100)    NOT NULL,
-uf          VARCHAR(20)     NOT NULL,
-cpf         VARCHAR(50)     NOT NULL
+    id         VARCHAR(36)  NOT NULL PRIMARY KEY,
+    logradouro VARCHAR(200) NOT NULL,
+    numero     VARCHAR(10)  NOT NULL,
+    bairro     VARCHAR(100) NOT NULL,
+    cidade     VARCHAR(100) NOT NULL,
+    uf         VARCHAR(20)  NOT NULL,
+    cep        VARCHAR(20)  NOT NULL,
+    created_at TIMESTAMP    NOT NULL,
+    updated_at TIMESTAMP
 );
 
 
 CREATE TABLE pedido (
     id          VARCHAR(36)   NOT NULL PRIMARY KEY,
     usuario_id  VARCHAR(36)   NOT NULL,
-    adress_id   VARCHAR(36)   NOT NULL,
+    endereco_id VARCHAR(36)   NOT NULL,
     status      VARCHAR(30)   NOT NULL,
     valor_itens NUMERIC(12,2) NOT NULL,
     valor_frete NUMERIC(12,2) NOT NULL,
@@ -20,7 +22,7 @@ CREATE TABLE pedido (
     created_at  TIMESTAMP     NOT NULL,
     updated_at  TIMESTAMP,
     CONSTRAINT fk_pedido_usuario FOREIGN KEY (usuario_id) REFERENCES usuarios (id),
-    CONSTRAINT fk_pedido_endereco FOREIGN KEY (adress_id) REFERENCES endereco (id)
+    CONSTRAINT fk_pedido_endereco FOREIGN KEY (endereco_id) REFERENCES endereco (id)
 );
 
 CREATE TABLE pedido_item (
