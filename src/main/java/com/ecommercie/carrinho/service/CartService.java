@@ -56,6 +56,9 @@ public class CartService {
                     .build() );
         }
 
+        // flush: garante o INSERT (e o id via @PrePersist) do item novo antes de montar a resposta
+        cartRepository.saveAndFlush(carrinho);
+
         return CartResponse.from(carrinho);
 
     }

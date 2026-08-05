@@ -1,6 +1,7 @@
 package com.ecommercie.security;
 
 import com.ecommercie.TestcontainersConfiguration;
+import com.ecommercie.carrinho.repository.CartRepository;
 import com.ecommercie.security.models.Papel;
 import com.ecommercie.security.models.User;
 import com.ecommercie.security.repository.RefreshTokenRepository;
@@ -45,11 +46,13 @@ class AuthFlowTest {
     @Autowired MockMvc mockMvc;
     @Autowired UserRepository userRepository;
     @Autowired RefreshTokenRepository refreshTokenRepository;
+    @Autowired CartRepository cartRepository;
     @Autowired PasswordEncoder passwordEncoder;
 
-    // isola cada teste: limpa refresh_tokens (FK) antes de usuarios
+    // isola cada teste: carrinhos e refresh_tokens (FKs) antes de usuarios
     @BeforeEach
     void limpar() {
+        cartRepository.deleteAll();
         refreshTokenRepository.deleteAll();
         userRepository.deleteAll();
     }
