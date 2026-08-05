@@ -13,7 +13,7 @@ import lombok.*;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class Address  extends BaseEntity {
+public class Address extends BaseEntity {
 
     @Column(nullable = false)
     private String logradouro;
