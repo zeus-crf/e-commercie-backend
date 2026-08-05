@@ -3,6 +3,7 @@ package com.ecommercie.catalogo;
 import com.ecommercie.TestcontainersConfiguration;
 import com.ecommercie.catalogo.models.Category;
 import com.ecommercie.catalogo.models.Product;
+import com.ecommercie.carrinho.repository.CartRepository;
 import com.ecommercie.catalogo.repository.CategoryRepository;
 import com.ecommercie.catalogo.repository.ProductRepository;
 import com.ecommercie.estoque.repository.InventoryItemRepository;
@@ -52,13 +53,15 @@ class CatalogFlowTest {
     @Autowired ProductRepository productRepository;
     @Autowired CategoryRepository categoryRepository;
     @Autowired InventoryItemRepository inventoryItemRepository;
+    @Autowired CartRepository cartRepository;
     @Autowired UserRepository userRepository;
     @Autowired RefreshTokenRepository refreshTokenRepository;
     @Autowired PasswordEncoder passwordEncoder;
 
-    // isola cada teste na ordem das FKs: estoque -> produtos -> categorias, depois usuarios
+    // isola cada teste na ordem das FKs: carrinho -> estoque -> produtos -> categorias, depois usuarios
     @BeforeEach
     void limpar() {
+        cartRepository.deleteAll();
         inventoryItemRepository.deleteAll();
         productRepository.deleteAll();
         categoryRepository.deleteAll();
