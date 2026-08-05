@@ -78,6 +78,10 @@ public class InventoryService {
         item.setDisponivel(estoque);
     }
 
-
-
+    /** Remove o estoque de um produto (usado quando o produto é excluído). */
+    @Transactional
+    public void removerDoProduto(String productId) {
+        inventoryItemRepository.findByProductId(productId)
+                .ifPresent(inventoryItemRepository::delete);
+    }
 }

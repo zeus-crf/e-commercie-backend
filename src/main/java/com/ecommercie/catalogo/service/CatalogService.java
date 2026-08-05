@@ -103,6 +103,7 @@ public class CatalogService {
 
     @Transactional
     public void deleteProduct(String productId) {
+        inventoryService.removerDoProduto(productId);   // remove o estoque antes (FK)
         productRepository.deleteById(productId);
     }
 

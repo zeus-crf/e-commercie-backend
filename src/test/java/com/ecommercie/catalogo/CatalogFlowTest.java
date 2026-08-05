@@ -5,6 +5,7 @@ import com.ecommercie.catalogo.models.Category;
 import com.ecommercie.catalogo.models.Product;
 import com.ecommercie.catalogo.repository.CategoryRepository;
 import com.ecommercie.catalogo.repository.ProductRepository;
+import com.ecommercie.estoque.repository.InventoryItemRepository;
 import com.ecommercie.security.models.Papel;
 import com.ecommercie.security.models.User;
 import com.ecommercie.security.repository.RefreshTokenRepository;
@@ -50,13 +51,15 @@ class CatalogFlowTest {
     @Autowired MockMvc mockMvc;
     @Autowired ProductRepository productRepository;
     @Autowired CategoryRepository categoryRepository;
+    @Autowired InventoryItemRepository inventoryItemRepository;
     @Autowired UserRepository userRepository;
     @Autowired RefreshTokenRepository refreshTokenRepository;
     @Autowired PasswordEncoder passwordEncoder;
 
-    // isola cada teste: produtos antes de categorias (FK), depois usuarios
+    // isola cada teste na ordem das FKs: estoque -> produtos -> categorias, depois usuarios
     @BeforeEach
     void limpar() {
+        inventoryItemRepository.deleteAll();
         productRepository.deleteAll();
         categoryRepository.deleteAll();
         refreshTokenRepository.deleteAll();
