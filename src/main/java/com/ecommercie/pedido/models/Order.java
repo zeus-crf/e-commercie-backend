@@ -31,7 +31,7 @@ public class Order extends BaseEntity {
     @Setter(AccessLevel.NONE)
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false)
-    private StatusOrder status;
+    private StatusOrder status = StatusOrder.AGUARDANDO_PAGAMENTO;
 
     @Column(nullable = false, name = "valor_itens")
     private BigDecimal valorItens;
