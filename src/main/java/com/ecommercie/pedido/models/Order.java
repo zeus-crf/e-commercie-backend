@@ -9,6 +9,7 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.random.RandomGenerator;
 
 @Entity
 @Table(name = "pedido")
@@ -27,6 +28,7 @@ public class Order extends BaseEntity {
     @JoinColumn(name = "endereco_id", nullable = false)
     private Address address;
 
+    @Setter(AccessLevel.NONE)
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false)
     private StatusOrder status;
@@ -43,5 +45,43 @@ public class Order extends BaseEntity {
 
     @Column(name = "expires_at")
     private LocalDateTime expiresAt;
+
+
+    public void markPaid() {
+        if (this.status != StatusOrder.AGUARDANDO_PAGAMENTO) {
+            throw new IllegalArgumentException("Só um pedido aguardando pagamento pode ser pago");
+        }
+        this.status = StatusOrder.PAGO;
+    }
+
+    public void markCancelado() {
+        if (this.status != StatusOrder.AGUARDANDO_PAGAMENTO) {
+            throw new IllegalArgumentException("Só um pedido aguardando pagamento pode ser cancelado");
+        }
+        this.status = StatusOrder.CANCELADO;
+    }
+
+    public void markSeparando() {
+        if (this.status != StatusOrder.PAGO) {
+            throw new IllegalArgumentException("Só um pedido pago pode ser separado");
+        }
+        this.status = StatusOrder.EM_SEPARACAO;
+    }
+
+    public void markEnviando() {
+        if (this.status != StatusOrder.EM_SEPARACAO) {
+            throw new IllegalArgumentException("Só um pedido separado pode ser enviado");
+        }
+        this.status = StatusOrder.ENVIADO;
+    }
+
+    public void markEntregue() {
+        if (this.status != StatusOrder.ENVIADO) {
+            throw new IllegalArgumentException("Só um pedido enviado pode ser entregue");
+        }
+        this.status = StatusOrder.ENTREGUE;
+    }
+
+
 
 }
