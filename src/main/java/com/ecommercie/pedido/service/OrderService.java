@@ -149,13 +149,26 @@ public class OrderService {
     public OrderResponse cancelar(User user, String orderId) {
         var order = orderRepository.findByIdAndUserId(orderId, user.getId())
                 .orElseThrow(() -> new EntityNotFoundException("Pedido não encontrado"));
+        cancelarEDevolver(order);
+        return OrderResponse.from(order);
+    }
 
+    // expira os pedidos AGUARDANDO_PAGAMENTO vencidos (disparado pelo job)
+    @Transactional
+    public void expirarPedidosVencidos() {
+        var vencidos = orderRepository.findByStatusAndExpiresAtBefore(
+                StatusOrder.AGUARDANDO_PAGAMENTO, LocalDateTime.now());
+        vencidos.forEach(this::cancelarEDevolver);
+    }
+
+    // cancela o pedido e devolve a reserva de estoque de cada item.
+    // reusado pelo cancelar (cliente) e pela expiração (job).
+    private void cancelarEDevolver(Order order) {
         order.markCancelado();
         for (OrderItem item : order.getItens()) {
             if (item.getProduct() != null) {
                 inventoryService.devolverReserva(item.getProduct().getId(), item.getQuantidade());
             }
         }
-        return OrderResponse.from(order);
     }
 }

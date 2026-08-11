@@ -24,7 +24,7 @@ public class Order extends BaseEntity {
     @JoinColumn(name = "usuario_id", nullable = false)
     private User user;
 
-    @ManyToOne
+    @OneToOne(cascade = CascadeType.ALL, orphanRemoval = true)
     @JoinColumn(name = "endereco_id", nullable = false)
     private Address address;
 
