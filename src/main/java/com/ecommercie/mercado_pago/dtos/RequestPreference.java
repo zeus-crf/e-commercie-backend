@@ -57,7 +57,7 @@ public record RequestPreference(
             String id,
             String title,
             String description,
-            String quantity,
-            String unitPrice
+            int quantity,
+            BigDecimal unitPrice
     ){}
 }
