@@ -73,6 +73,13 @@
             <artifactId>spring-boot-starter-mail</artifactId>
         </dependency>
 
+        <!-- Mercado Livre-->
+        <dependency>
+            <groupId>com.mercadopago</groupId>
+            <artifactId>sdk-java</artifactId>
+            <version>3.5.0</version>
+        </dependency>
+
         <!-- JWT - jjwt -->
         <dependency>
             <groupId>io.jsonwebtoken</groupId>
