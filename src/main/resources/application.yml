@@ -58,4 +58,4 @@ storage:
   public-url: http://localhost:8080/files # base da URL devolvida
 
 mercado-pago-access_token: ${MP_ACCESS_TOKEN:APP_USR-4577563560618227-081318-eccc5179f422366b7f0b76478c824195-3615189676}
-mercado-pago-notification_url: ${MP_NOTIFICATION_URL:http://localhost:8080/webhooks/mercadopago}
+mercado-pago-notification_url: ${MP_NOTIFICATION_URL:https://oxidize-deviant-shrug.ngrok-free.dev/api/v1/webhooks/mercadopago}
