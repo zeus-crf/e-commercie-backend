@@ -1,6 +1,7 @@
 package com.ecommercie.estoque.service;
 
 import com.ecommercie.catalogo.models.Product;
+import com.ecommercie.catalogo.repository.ProductRepository;
 import com.ecommercie.estoque.model.InventoryItem;
 import com.ecommercie.estoque.repository.InventoryItemRepository;
 import jakarta.persistence.EntityNotFoundException;
@@ -13,6 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class InventoryService {
 
     private final InventoryItemRepository inventoryItemRepository;
+    private final ProductRepository productRepository;
 
     @Transactional
     public void reservarItem(String productId, int qtd) {
@@ -68,8 +70,20 @@ public class InventoryService {
 
     @Transactional
     public void ajustarEstoque(String productId, int estoque) {
-        var item = inventoryItemRepository.lockForUpdate(productId)
-                .orElseThrow(() -> new EntityNotFoundException("Produto não encontrado"));
+        var item = inventoryItemRepository.findByProductId(productId)
+                .orElse(null);
+
+        if (item == null) {
+            Product product = productRepository.findById(productId)
+                    .orElseThrow(() -> new EntityNotFoundException("Produto não encontrado"));
+            InventoryItem novo = InventoryItem.builder()
+                    .product(product)
+                    .disponivel(estoque)
+                    .reservada(0)
+                    .build();
+            inventoryItemRepository.save(novo);
+            return;
+        }
 
         if (item.getReservada() > estoque) {
             throw new IllegalArgumentException("O estoque não pode ser menor que o já reservado");

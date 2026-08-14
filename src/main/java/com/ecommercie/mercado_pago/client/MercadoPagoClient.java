@@ -66,7 +66,6 @@ public class MercadoPagoClient implements PaymentGateway {
                     .backUrls(backUrls)
                     .notificationUrl(notificationUrl)
                     .externalReference(order.getId())
-                    .autoReturn("approved")
                     .build();
 
 
@@ -76,7 +75,7 @@ public class MercadoPagoClient implements PaymentGateway {
 
 
         } catch (MPApiException ex) {
-            log.error("Erro ao criar preferência na API do mercado pago: {}", ex.getMessage());
+            log.error("Erro MP [{}]: {}", ex.getStatusCode(), ex.getApiResponse().getContent());
             throw ex;
         }
         catch (MPException ex) {
