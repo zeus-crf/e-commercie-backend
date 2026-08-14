@@ -26,3 +26,4 @@ public class InventoryItem extends BaseEntity {
     @Builder.Default
     private int reservada = 0;
 }
+
