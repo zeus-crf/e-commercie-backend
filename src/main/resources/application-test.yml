@@ -20,6 +20,9 @@ security:
   cookie:
     secure: false
 
+mercado-pago-access_token: APP_USR-4577563560618227-081318-eccc5179f422366b7f0b76478c824195-3615189676
+mercado-pago-notification_url: http://localhost:8080/webhooks/mercadopago
+
 app:
   cors:
     allowed-origin: http://localhost:4200

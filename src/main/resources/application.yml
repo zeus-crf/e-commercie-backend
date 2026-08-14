@@ -56,3 +56,6 @@ storage:
   local:
     dir: uploads                          # pasta onde salva (relativa ao projeto)
   public-url: http://localhost:8080/files # base da URL devolvida
+
+mercado-pago-access_token: ${MP_ACCESS_TOKEN:TEST-dummy-token-for-dev}
+mercado-pago-notification_url: ${MP_NOTIFICATION_URL:http://localhost:8080/webhooks/mercadopago}
