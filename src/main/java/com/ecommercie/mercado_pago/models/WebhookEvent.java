@@ -7,7 +7,6 @@ import jakarta.persistence.Table;
 @Entity
 @Table(name = "webhook_event")
 public class WebhookEvent extends BaseEntity {
-
     private String provider;
     private String externalId;
     private String status;
