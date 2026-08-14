@@ -7,6 +7,7 @@ import com.ecommercie.carrinho.model.CartItem;
 import com.ecommercie.carrinho.repository.CartRepository;
 import com.ecommercie.catalogo.models.Product;
 import com.ecommercie.catalogo.repository.ProductRepository;
+import com.ecommercie.estoque.repository.InventoryItemRepository;
 import com.ecommercie.security.models.User;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
@@ -21,6 +22,7 @@ public class CartService {
 
     private final CartRepository cartRepository;
     private final ProductRepository productRepository;
+    private final InventoryItemRepository inventoryItemRepository;
 
 
     @Transactional
@@ -41,10 +43,18 @@ public class CartService {
         Product product = productRepository.findById(request.product_id())
                 .orElseThrow(() -> new EntityNotFoundException("Esse produto não existe"));
 
+        var estoque = inventoryItemRepository.findByProductId(product.getId())
+                .orElseThrow(() -> new EntityNotFoundException("Estoque não encontrado para o produto"));
 
         Optional<CartItem> existente = carrinho.getItens().stream()
                 .filter(i -> i.getProduct().getId().equals(product.getId()))
                 .findFirst();
+
+        int quantidadeTotal = request.quantidade() + existente.map(CartItem::getQuantidade).orElse(0);
+        int disponivel = estoque.getDisponivel() - estoque.getReservada();
+        if (quantidadeTotal > disponivel) {
+            throw new IllegalArgumentException("Quantidade solicitada indisponível em estoque");
+        }
 
         if (existente.isPresent()) {
             existente.get().setQuantidade(existente.get().getQuantidade() + request.quantidade());
@@ -71,6 +81,14 @@ public class CartService {
 
         Product product = productRepository.findById(request.product_id())
                 .orElseThrow(() -> new EntityNotFoundException("Esse produto não existe"));
+
+        var estoque = inventoryItemRepository.findByProductId(product.getId())
+                .orElseThrow(() -> new EntityNotFoundException("Estoque não encontrado para o produto"));
+
+        int disponivel = estoque.getDisponivel() - estoque.getReservada();
+        if (request.quantidade() > disponivel) {
+            throw new IllegalArgumentException("Quantidade solicitada indisponível em estoque");
+        }
 
         Optional<CartItem> existente = carrinho.getItens().stream()
                 .filter(i -> i.getProduct().getId().equals(product.getId()))
