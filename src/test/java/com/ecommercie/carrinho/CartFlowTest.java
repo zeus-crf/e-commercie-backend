@@ -82,7 +82,7 @@ class CartFlowTest {
     private Product saveProduct(String nome, String preco) {
         Category cat = categoryRepository.save(
                 Category.builder().nome("Cat " + nome).slug("cat-" + nome.toLowerCase()).build());
-        return productRepository.save(Product.builder()
+        Product product = productRepository.save(Product.builder()
                 .category(cat)
                 .nome(nome)
                 .preco(new BigDecimal(preco))
@@ -92,6 +92,13 @@ class CartFlowTest {
                 .larguraCm(new BigDecimal("20"))
                 .comprimentoCm(new BigDecimal("30"))
                 .build());
+        inventoryItemRepository.save(
+                com.ecommercie.estoque.model.InventoryItem.builder()
+                        .product(product)
+                        .disponivel(10)
+                        .reservada(0)
+                        .build());
+        return product;
     }
 
     private String itemBody(String productId, int qtd) {
