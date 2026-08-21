@@ -46,7 +46,19 @@ public class Order extends BaseEntity {
     @Column(name = "expires_at")
     private LocalDateTime expiresAt;
 
+    @Column(name = "mp_payment_id")
+    private Long mpPaymentId;
 
+    @Column(name = "return_reason", length = 500)
+    private String returnReason;
+
+    @Column(name = "return_requested_at")
+    private LocalDateTime returnRequestedAt;
+
+    @Column(name = "refunded_at")
+    private LocalDateTime refundedAt;
+
+    
     public void markPaid() {
         if (this.status != StatusOrder.AGUARDANDO_PAGAMENTO) {
             throw new IllegalArgumentException("Só um pedido aguardando pagamento pode ser pago");
@@ -80,6 +92,24 @@ public class Order extends BaseEntity {
             throw new IllegalArgumentException("Só um pedido enviado pode ser entregue");
         }
         this.status = StatusOrder.ENTREGUE;
+    }
+
+
+    public void markDevolucaoSolicitada() {
+        if (this.status != StatusOrder.PAGO &&
+            this.status != StatusOrder.EM_SEPARACAO &&
+            this.status != StatusOrder.ENVIADO &&
+            this.status != StatusOrder.ENTREGUE) {
+            throw new IllegalArgumentException("Devolução só pode ser solicitada para pedidos pagos, em separação, enviados ou entregues");
+        }
+        this.status = StatusOrder.DEVOLUCAO_SOLICITADA;
+    }
+
+    public void markDevolucao() {
+        if (this.status != StatusOrder.DEVOLUCAO_SOLICITADA) {
+            throw new IllegalArgumentException("Só um pedido que teve uma devolução solicitada pode ser devolvido");
+        }
+        this.status = StatusOrder.DEVOLVIDO;
     }
 
 
