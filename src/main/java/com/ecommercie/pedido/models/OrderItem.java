@@ -2,6 +2,7 @@ package com.ecommercie.pedido.models;
 
 import com.ecommercie.catalogo.models.Product;
 import com.ecommercie.shared.BaseEntity;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -16,6 +17,7 @@ import java.math.BigDecimal;
 @Builder
 public class OrderItem extends BaseEntity {
 
+    @JsonIgnore
     @ManyToOne
     @JoinColumn(name = "pedido_id", nullable = false)
     private Order order;
