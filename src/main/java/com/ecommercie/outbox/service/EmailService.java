@@ -53,6 +53,24 @@ public class EmailService {
         mailSender.send(message);
     }
 
+    public void enviarReembolsoSolicitado(String orderId, String destino) {
+        SimpleMailMessage message = new SimpleMailMessage();
+        message.setFrom(from);
+        message.setTo(destino);
+        message.setSubject("Solicitação de devolução recebida - Pedido " + orderId);
+        message.setText("Recebemos sua solicitação de devolução para o pedido " + orderId + ". Em breve nossa equipe entrará em contato.");
+        mailSender.send(message);
+    }
+
+    public void enviarReembolsoConfirmado(String orderId, String destino) {
+        SimpleMailMessage message = new SimpleMailMessage();
+        message.setFrom(from);
+        message.setTo(destino);
+        message.setSubject("Reembolso confirmado - Pedido " + orderId);
+        message.setText("Seu reembolso referente ao pedido " + orderId + " foi processado com sucesso.");
+        mailSender.send(message);
+    }
+
 
 
 

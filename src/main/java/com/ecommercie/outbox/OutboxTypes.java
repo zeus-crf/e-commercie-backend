@@ -10,6 +10,8 @@ public final class OutboxTypes {
     public static final String EMAIL_PEDIDO_ENVIADO = "EMAIL_PEDIDO_ENVIADO";
     public static final String EMAIL_PEDIDO_CANCELADO = "EMAIL_PEDIDO_CANCELADO";
     public static final String EMAIL_PEDIDO_ENTREGUE = "EMAIL_PEDIDO_ENTREGUE";
+    public static final String EMAIL_REEMBOLSO_CONFIRMADO = "EMAIL_REEMBOLSO_CONFIRMADO";
+    public static final String EMAIL_REEMBOLSO_SOLICITADO = "EMAIL_REEMBOLSO_SOLICITADO";
 
     private OutboxTypes() {}
 }
