@@ -3,6 +3,8 @@ package com.ecommercie.mercado_pago.controller;
 import com.ecommercie.mercado_pago.dtos.MercadoPagoNotification;
 import com.ecommercie.mercado_pago.service.WebhookService;
 import com.ecommercie.shared.ApiResponse;
+import com.mercadopago.exceptions.MPApiException;
+import com.mercadopago.exceptions.MPException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
@@ -25,7 +27,12 @@ public class WebhookController {
         }
         try {
             webhookService.processarNotificacao(notification);
+        } catch (MPApiException | MPException ex) {
+            // Erro na API do MP (timeout, indisponibilidade) — retorna 5xx para o MP retentar
+            log.error("Erro de comunicação com MP id={}: {}", notification.data().id(), ex.getMessage());
+            return ResponseEntity.internalServerError().build();
         } catch (Exception ex) {
+            // Erro de negócio (pedido não encontrado, etc.) — retorna 200, não vale retentar
             log.error("Erro ao processar webhook MP id={}: {}", notification.data().id(), ex.getMessage());
         }
         return ResponseEntity.ok(ApiResponse.ok("ok", null));
