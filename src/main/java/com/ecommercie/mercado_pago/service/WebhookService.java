@@ -46,6 +46,7 @@ public class WebhookService {
                 .orElseThrow(() -> new EntityNotFoundException("Pedido não encontrado: " + payment.getExternalReference()));
 
         order.markPaid();
+        order.setMpPaymentId(payment.getId());
         orderRepository.save(order);
 
         for (OrderItem item : order.getItens()) {
