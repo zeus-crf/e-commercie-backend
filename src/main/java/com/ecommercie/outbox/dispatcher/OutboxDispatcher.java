@@ -38,6 +38,16 @@ public class OutboxDispatcher {
                 emailService.enviarConfirmacaoEntregue(p.orderId(), p.email());
             }
 
+            case OutboxTypes.EMAIL_REEMBOLSO_SOLICITADO -> {
+                var p = objectMapper.readValue(event.getPayload(), EmailPayload.class);
+                emailService.enviarReembolsoSolicitado(p.orderId(), p.email());
+            }
+
+            case OutboxTypes.EMAIL_REEMBOLSO_CONFIRMADO -> {
+                var p = objectMapper.readValue(event.getPayload(), EmailPayload.class);
+                emailService.enviarReembolsoConfirmado(p.orderId(), p.email());
+            }
+
             default -> throw new IllegalStateException("Tipo de outbox desconhecido: " + event.getType());
         }
     }
