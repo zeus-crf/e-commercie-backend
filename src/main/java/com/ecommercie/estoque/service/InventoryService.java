@@ -43,6 +43,15 @@ public class InventoryService {
 
     }
 
+    @Transactional
+    public void estornarBaixa(String productId, int qtd) {
+        var item = inventoryItemRepository.lockForUpdate(productId)
+                .orElseThrow(() -> new EntityNotFoundException("Produto não encontrado"));
+
+
+        item.setDisponivel(item.getDisponivel() + qtd);
+    }
+
 
     @Transactional
     public void devolverReserva(String productId, int qtd) {
