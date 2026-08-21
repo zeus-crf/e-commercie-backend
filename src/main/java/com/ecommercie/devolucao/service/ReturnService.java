@@ -7,6 +7,7 @@ import com.ecommercie.outbox.service.OutboxService;
 import com.ecommercie.pedido.models.Order;
 import com.ecommercie.pedido.models.OrderItem;
 import com.ecommercie.pedido.repository.OrderRepository;
+import com.ecommercie.security.models.User;
 import com.mercadopago.client.payment.PaymentRefundClient;
 import com.mercadopago.exceptions.MPApiException;
 import com.mercadopago.exceptions.MPException;
@@ -24,10 +25,11 @@ public class ReturnService {
     private final OrderRepository orderRepository;
     private final InventoryService inventoryService;
     private final OutboxService outboxService;
+    private final PaymentRefundClient paymentRefundClient;
 
     @Transactional
-    public void devolucaoSolicitada(String orderId, String motivo) {
-        Order order = orderRepository.findById(orderId)
+    public void devolucaoSolicitada(User user, String orderId, String motivo) {
+        Order order = orderRepository.findByIdAndUserId(orderId, user.getId())
                 .orElseThrow(() -> new EntityNotFoundException("Pedido não encontrado"));
 
         order.markDevolucaoSolicitada();
@@ -45,7 +47,7 @@ public class ReturnService {
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new EntityNotFoundException("Pedido não encontrado"));
 
-        new PaymentRefundClient().refund(order.getMpPaymentId());
+        paymentRefundClient.refund(order.getMpPaymentId());
 
         for (OrderItem item : order.getItens()) {
             inventoryService.estornarBaixa(item.getProduct().getId(), item.getQuantidade());
