@@ -16,11 +16,13 @@ public class ReturnController {
 
     private final ReturnService returnService;
 
+    public record DevolucaoRequest(String motivo) {}
+
     @PostMapping("/{orderId}/return")
     public ResponseEntity<ApiResponse<Void>> solicitarDevolucao(@AuthenticationPrincipal UserDetails userDetails,
                                                                 @PathVariable String orderId,
-                                                                @RequestParam String motivo) {
-        returnService.devolucaoSolicitada((User) userDetails, orderId, motivo);
+                                                                @RequestBody DevolucaoRequest body) {
+        returnService.devolucaoSolicitada((User) userDetails, orderId, body.motivo());
         return ResponseEntity.ok(ApiResponse.ok("Devolução solicitada com sucesso", null));
     }
 }

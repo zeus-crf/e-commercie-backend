@@ -160,7 +160,8 @@ class ReturnFlowTest {
 
         mockMvc.perform(post("/api/v1/orders/" + orderId + "/return")
                         .cookie(cli)
-                        .param("motivo", "produto com defeito"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"motivo\":\"produto com defeito\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.message").value("Devolução solicitada com sucesso"));
 
@@ -187,7 +188,8 @@ class ReturnFlowTest {
 
         mockMvc.perform(post("/api/v1/orders/" + orderId + "/return")
                         .cookie(cli)
-                        .param("motivo", "arrependimento"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"motivo\":\"arrependimento\"}"))
                 .andExpect(status().isBadRequest());
     }
 
@@ -203,7 +205,8 @@ class ReturnFlowTest {
         // B tenta solicitar devolução do pedido de A
         mockMvc.perform(post("/api/v1/orders/" + orderIdA + "/return")
                         .cookie(clienteB)
-                        .param("motivo", "não é meu"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"motivo\":\"não é meu\"}"))
                 .andExpect(status().isNotFound());
     }
 

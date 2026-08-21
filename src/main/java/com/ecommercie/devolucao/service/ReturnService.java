@@ -8,11 +8,14 @@ import com.ecommercie.pedido.models.Order;
 import com.ecommercie.pedido.models.OrderItem;
 import com.ecommercie.pedido.repository.OrderRepository;
 import com.ecommercie.security.models.User;
+import com.mercadopago.client.payment.PaymentClient;
 import com.mercadopago.client.payment.PaymentRefundClient;
 import com.mercadopago.exceptions.MPApiException;
 import com.mercadopago.exceptions.MPException;
+import com.mercadopago.resources.payment.Payment;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -20,6 +23,7 @@ import java.time.LocalDateTime;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class ReturnService {
 
     private final OrderRepository orderRepository;
@@ -47,16 +51,32 @@ public class ReturnService {
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new EntityNotFoundException("Pedido não encontrado"));
 
-        paymentRefundClient.refund(order.getMpPaymentId());
+        try {
+            paymentRefundClient.refund(order.getMpPaymentId());
+            for (OrderItem item : order.getItens()) {
+                inventoryService.estornarBaixa(item.getProduct().getId(), item.getQuantidade());
+            }
 
-        for (OrderItem item : order.getItens()) {
-            inventoryService.estornarBaixa(item.getProduct().getId(), item.getQuantidade());
+            order.markDevolucao();
+            order.setRefundedAt(LocalDateTime.now());
+            orderRepository.save(order);
+
+
+            outboxService.registrar(OutboxTypes.EMAIL_REEMBOLSO_CONFIRMADO, new OutboxDispatcher.EmailPayload(order.getId(), order.getUser().getEmail()));
+
+        } catch (MPApiException e) {
+            log.error("MP refund error: status={} body={}", e.getApiResponse().getStatusCode(), e.getApiResponse().getContent());
+            PaymentClient paymentClient = new PaymentClient();
+
+            Payment payment = paymentClient.get(order.getMpPaymentId());
+
+            log.info("Payment ID: {}", payment.getId());
+            log.info("Status: {}", payment.getStatus());
+            log.info("Status detail: {}", payment.getStatusDetail());
+
+            throw e;
         }
 
-        order.markDevolucao();
-        order.setRefundedAt(LocalDateTime.now());
-        orderRepository.save(order);
 
-        outboxService.registrar(OutboxTypes.EMAIL_REEMBOLSO_CONFIRMADO, new OutboxDispatcher.EmailPayload(order.getId(), order.getUser().getEmail()));
     }
 }
