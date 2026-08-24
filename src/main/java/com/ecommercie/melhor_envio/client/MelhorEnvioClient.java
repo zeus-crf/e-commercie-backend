@@ -9,6 +9,8 @@ import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 
+import org.springframework.http.MediaType;
+
 import java.math.BigDecimal;
 import java.util.List;
 
@@ -30,6 +32,7 @@ public class MelhorEnvioClient implements ShippingProvider {
                 .baseUrl(baseUrl)
                 .defaultHeader("Authorization", token)
                 .defaultHeader("User-Agent", userAgent)
+                .defaultHeader("Accept", "application/json")
                 .build();
     }
 
@@ -53,7 +56,8 @@ public class MelhorEnvioClient implements ShippingProvider {
         );
 
         List<MeCalculateResponse> raw = restClient.post()
-                .uri("/api/v1/me/shipment/calculate")
+                .uri("/api/v2/me/shipment/calculate")
+                .contentType(MediaType.APPLICATION_JSON)
                 .body(payload)
                 .retrieve()
                 .body(new ParameterizedTypeReference<>() {});
