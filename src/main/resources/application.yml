@@ -1,4 +1,4 @@
-server:
+﻿server:
   port: 8080
 
 spring:
@@ -59,3 +59,9 @@ storage:
 
 mercado-pago-access_token: ${MP_ACCESS_TOKEN:APP_USR-4577563560618227-081318-eccc5179f422366b7f0b76478c824195-3615189676}
 mercado-pago-notification_url: ${MP_NOTIFICATION_URL:https://oxidize-deviant-shrug.ngrok-free.dev/api/v1/webhooks/mercadopago}
+
+melhorenvio:
+  token: ${ME_TOKEN}
+  origin-cep: ${SHIPPING_ORIGIN_CEP:01310100}
+  user-agent: "ecommercie/1.0 mpmiguel2007@gmail.com"
+  base-url: https://sandbox.melhorenvio.com.br
