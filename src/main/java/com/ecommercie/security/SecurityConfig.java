@@ -46,6 +46,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/files/**").permitAll()
                         .requestMatchers(
                                 "/api/v1/auth/register",
+                                "/api/v1/shipping/quote",
                                 "/api/v1/auth/login",
                                 "/api/v1/auth/refresh",
                                 "/api/v1/auth/logout").permitAll()
