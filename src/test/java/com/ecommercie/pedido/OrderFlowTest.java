@@ -64,7 +64,7 @@ class OrderFlowTest {
     @Autowired PasswordEncoder passwordEncoder;
 
     private static final String ENDERECO = """
-            { "logradouro":"Rua A","numero":"10","bairro":"Centro","cidade":"Sao Paulo","uf":"SP","cep":"01000000" }
+            { "logradouro":"Rua A","numero":"10","bairro":"Centro","cidade":"Sao Paulo","uf":"SP","cep":"01000000","serviceId":1,"valorFrete":15.00 }
             """;
 
     // limpa na ordem das FKs: pedido (cascade item+endereco) e carrinho antes de produtos/usuarios

@@ -43,6 +43,9 @@ public class Order extends BaseEntity {
     @Builder.Default
     private List<OrderItem> itens = new ArrayList<>();
 
+    @Column(name = "shipping_service_id")
+    private Integer shippingServiceId;
+
     @Column(name = "expires_at")
     private LocalDateTime expiresAt;
 

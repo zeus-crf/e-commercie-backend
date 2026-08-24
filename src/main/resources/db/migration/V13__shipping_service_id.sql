@@ -1,0 +1,1 @@
+ALTER TABLE pedido ADD COLUMN IF NOT EXISTS shipping_service_id INTEGER;

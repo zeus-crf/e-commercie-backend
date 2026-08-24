@@ -75,7 +75,8 @@ public class OrderService {
         order.setUser(user);
         order.setExpiresAt(LocalDateTime.now().plusMinutes(30));
         order.setValorItens(valorItens);
-        order.setValorFrete(BigDecimal.ZERO);
+        order.setValorFrete(request.valorFrete());
+        order.setShippingServiceId(request.serviceId());
 
 
         orderRepository.save(order);
