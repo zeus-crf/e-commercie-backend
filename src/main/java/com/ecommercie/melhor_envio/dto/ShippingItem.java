@@ -1,4 +1,12 @@
 package com.ecommercie.melhor_envio.dto;
 
-public record ShippingItem() {
+import java.math.BigDecimal;
+
+public record ShippingItem(
+        BigDecimal pesoKg,
+        BigDecimal alturaCm,
+        BigDecimal larguraCm,
+        BigDecimal comprimentoCm,
+        int quantidade
+) {
 }

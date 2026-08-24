@@ -1,4 +1,9 @@
 package com.ecommercie.melhor_envio.dto;
 
-public record ShippingQuoteRequest() {
+import java.util.List;
+
+public record ShippingQuoteRequest(
+        String cepDestino,
+        List<ShippingItem> itens
+) {
 }
