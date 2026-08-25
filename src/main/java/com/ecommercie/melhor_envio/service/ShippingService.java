@@ -28,6 +28,9 @@ public class ShippingService {
     public Shipment gerarEtiqueta(String orderId) {
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new EntityNotFoundException("Pedido não encontrado"));
+        if (order.getShippingServiceId() == null) {
+            throw new IllegalStateException("Pedido não possui transportadora selecionada (shippingServiceId null). Use um pedido feito após a seleção de frete.");
+        }
         return shippingProvider.buyLabel(order, order.getShippingServiceId());
     }
 

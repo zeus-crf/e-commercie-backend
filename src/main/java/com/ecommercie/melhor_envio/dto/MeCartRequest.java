@@ -1,20 +1,21 @@
 package com.ecommercie.melhor_envio.dto;
 
-import lombok.Builder;
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
 
 import java.math.BigDecimal;
 import java.util.List;
 
-@Builder
+@JsonInclude(JsonInclude.Include.NON_NULL)
 public record MeCartRequest(
         Integer service,
         MeAddress from,
         MeAddress to,
         List<MeProduct> products,
-        List<MeVolume> volumes
+        List<MeVolume> volumes,
+        @JsonProperty("insurance_value") BigDecimal insurance_value
 ) {
 
-    @Builder
     public record MeAddress(
             String name,
             String phone,
@@ -25,17 +26,16 @@ public record MeCartRequest(
             String number,
             String district,
             String city,
-            String state_abbr
+            String state_abbr,
+            String country_id
     ) {}
 
-    @Builder
     public record MeProduct(
             String name,
             int quantity,
             BigDecimal unitary_value
     ) {}
 
-    @Builder
     public record MeVolume(
             BigDecimal weight,
             BigDecimal width,
