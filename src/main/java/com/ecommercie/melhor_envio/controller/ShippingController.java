@@ -8,19 +8,18 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/v1/shipping/")
+@RequestMapping("/api/v1/shipping")
 @RequiredArgsConstructor
 public class ShippingController {
 
     private final ShippingService shippingService;
 
-
     @PostMapping("/quote")
     public ResponseEntity<ApiResponse<List<ShippingQuote>>> quote(@RequestBody ShippingQuoteRequest request) {
         return ResponseEntity.ok(ApiResponse.ok(shippingService.quote(request)));
     }
+
 }

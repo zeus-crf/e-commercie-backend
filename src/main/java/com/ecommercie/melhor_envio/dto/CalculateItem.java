@@ -1,10 +1,7 @@
 package com.ecommercie.melhor_envio.dto;
 
-import lombok.Builder;
-
 import java.math.BigDecimal;
 
-@Builder
 public record CalculateItem(
         BigDecimal weight,
         BigDecimal width,
@@ -12,4 +9,7 @@ public record CalculateItem(
         BigDecimal length,
         int quantity
 ) {
+    public static CalculateItem of(BigDecimal weight, BigDecimal width, BigDecimal height, BigDecimal length, int quantity) {
+        return new CalculateItem(weight, width, height, length, quantity);
+    }
 }
