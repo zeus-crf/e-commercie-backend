@@ -4,5 +4,6 @@ CREATE TABLE shipment_tracking_events (
     status        VARCHAR(60)  NOT NULL,
     tracking_code VARCHAR(60),
     occurred_at   TIMESTAMP    NOT NULL,
-    created_at    TIMESTAMP    NOT NULL DEFAULT now()
+    created_at    TIMESTAMP    NOT NULL DEFAULT now(),
+    updated_at    TIMESTAMP    NOT NULL DEFAULT now()
 );
