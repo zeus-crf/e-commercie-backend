@@ -19,21 +19,45 @@ public class WebhookController {
     private final WebhookService webhookService;
 
     @PostMapping("/mercadopago")
-    public ResponseEntity<ApiResponse<?>> receberNotificacao(@RequestBody MercadoPagoNotification notification) {
-        // MP envia pings de teste e outros tipos (subscriptions, etc.) sem data — ignora
-        if (!"payment".equals(notification.type()) || notification.data() == null || notification.data().id() == null) {
-            log.info("Webhook MP ignorado: type={} action={}", notification.type(), notification.action());
+    public ResponseEntity<ApiResponse<?>> receberNotificacao(
+            @RequestBody(required = false) MercadoPagoNotification notification,
+            @RequestParam(required = false) String id,
+            @RequestParam(required = false) String topic) {
+
+        if (notification == null) {
+            notification = new MercadoPagoNotification(null, null, topic, null, id != null ? new MercadoPagoNotification.Data(id) : null);
+        }
+
+        // Normaliza: suporta formato webhook (type/data.id) e IPN (topic/query param id)
+        String tipo = notification.tipoNormalizado() != null ? notification.tipoNormalizado() : topic;
+        String paymentId = (notification.data() != null && notification.data().id() != null)
+                ? notification.data().id()
+                : id;
+
+        log.info("Webhook MP recebido: tipo={} paymentId={}", tipo, paymentId);
+
+        if (paymentId == null) {
+            log.info("Webhook MP ignorado: tipo={} sem id", tipo);
             return ResponseEntity.ok(ApiResponse.ok("ok", null));
         }
+
         try {
-            webhookService.processarNotificacao(notification);
+            if ("payment".equals(tipo)) {
+                MercadoPagoNotification notificationFinal = notification.data() != null && notification.data().id() != null
+                        ? notification
+                        : new MercadoPagoNotification(notification.action(), tipo, notification.topic(), notification.resource(),
+                                new MercadoPagoNotification.Data(paymentId));
+                webhookService.processarNotificacao(notificationFinal);
+            } else if ("merchant_order".equals(tipo)) {
+                webhookService.processarMerchantOrder(paymentId);
+            } else {
+                log.info("Webhook MP ignorado: tipo={} paymentId={}", tipo, paymentId);
+            }
         } catch (MPApiException | MPException ex) {
-            // Erro na API do MP (timeout, indisponibilidade) — retorna 5xx para o MP retentar
-            log.error("Erro de comunicação com MP id={}: {}", notification.data().id(), ex.getMessage());
+            log.error("Erro de comunicação com MP id={}: {}", paymentId, ex.getMessage());
             return ResponseEntity.internalServerError().build();
         } catch (Exception ex) {
-            // Erro de negócio (pedido não encontrado, etc.) — retorna 200, não vale retentar
-            log.error("Erro ao processar webhook MP id={}: {}", notification.data().id(), ex.getMessage());
+            log.error("Erro ao processar webhook MP id={}: {}", paymentId, ex.getMessage());
         }
         return ResponseEntity.ok(ApiResponse.ok("ok", null));
     }

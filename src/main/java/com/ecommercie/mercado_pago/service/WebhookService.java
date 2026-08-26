@@ -10,17 +10,24 @@ import com.ecommercie.outbox.service.OutboxService;
 import com.ecommercie.pedido.models.Order;
 import com.ecommercie.pedido.models.OrderItem;
 import com.ecommercie.pedido.repository.OrderRepository;
+import com.mercadopago.client.merchantorder.MerchantOrderClient;
 import com.mercadopago.client.payment.PaymentClient;
 import com.mercadopago.exceptions.MPApiException;
 import com.mercadopago.exceptions.MPException;
+import com.mercadopago.resources.merchantorder.MerchantOrder;
+import com.mercadopago.resources.merchantorder.MerchantOrderPayment;
 import com.mercadopago.resources.payment.Payment;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
+
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class WebhookService {
 
     private final WebhookEventRepository webhookEventRepository;
@@ -30,23 +37,60 @@ public class WebhookService {
 
     @Transactional
     public void processarNotificacao(MercadoPagoNotification request) throws MPException, MPApiException {
-        if (webhookEventRepository.existsByProviderAndExternalId("mercadopago", request.data().id())) {
+        String paymentId = request.data().id();
+        log.info("WebhookService: processando payment id={}", paymentId);
+
+        if (webhookEventRepository.existsByProviderAndExternalId("mercadopago", paymentId)) {
+            log.info("WebhookService: paymentId={} já processado, ignorando", paymentId);
             return;
         }
 
         PaymentClient client = new PaymentClient();
-        Payment payment = client.get(Long.parseLong(request.data().id()));
+        Payment payment = client.get(Long.parseLong(paymentId));
 
-        // Webhooks chegam para qualquer status (pending, rejected, etc.) — ignoramos os que não são approved
+        log.info("WebhookService: paymentId={} status={} externalReference={}", paymentId, payment.getStatus(), payment.getExternalReference());
+
         if (!"approved".equals(payment.getStatus())) {
+            log.info("WebhookService: status não é approved — ignorando");
             return;
         }
 
-        Order order = orderRepository.findById(payment.getExternalReference())
-                .orElseThrow(() -> new EntityNotFoundException("Pedido não encontrado: " + payment.getExternalReference()));
+        processarPagamentoAprovado(payment.getExternalReference(), paymentId);
+    }
+
+    @Transactional
+    public void processarMerchantOrder(String merchantOrderId) throws MPException, MPApiException {
+        log.info("WebhookService: processando merchant_order id={}", merchantOrderId);
+
+        MerchantOrderClient moClient = new MerchantOrderClient();
+        MerchantOrder merchantOrder = moClient.get(Long.parseLong(merchantOrderId));
+
+        List<MerchantOrderPayment> payments = merchantOrder.getPayments();
+        if (payments == null || payments.isEmpty()) {
+            log.info("WebhookService: merchant_order {} sem pagamentos", merchantOrderId);
+            return;
+        }
+
+        for (MerchantOrderPayment mp : payments) {
+            if (!"approved".equals(mp.getStatus())) {
+                continue;
+            }
+            String paymentId = String.valueOf(mp.getId());
+            if (webhookEventRepository.existsByProviderAndExternalId("mercadopago", paymentId)) {
+                log.info("WebhookService: paymentId={} já processado, ignorando", paymentId);
+                continue;
+            }
+            log.info("WebhookService: merchant_order {} → payment aprovado id={}", merchantOrderId, paymentId);
+            processarPagamentoAprovado(merchantOrder.getExternalReference(), paymentId);
+        }
+    }
+
+    private void processarPagamentoAprovado(String orderId, String paymentId) {
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new EntityNotFoundException("Pedido não encontrado: " + orderId));
 
         order.markPaid();
-        order.setMpPaymentId(payment.getId());
+        order.setMpPaymentId(Long.parseLong(paymentId));
         orderRepository.save(order);
 
         for (OrderItem item : order.getItens()) {
@@ -60,8 +104,10 @@ public class WebhookService {
 
         webhookEventRepository.save(WebhookEvent.builder()
                 .provider("mercadopago")
-                .externalId(request.data().id())
+                .externalId(paymentId)
                 .status("PROCESSED")
                 .build());
+
+        log.info("WebhookService: pedido {} marcado como pago (paymentId={})", orderId, paymentId);
     }
 }
