@@ -1,0 +1,11 @@
+CREATE TABLE invoice(
+id VARCHAR(36) NOT NULL PRIMARY KEY,
+pedido_id VARCHAR(36) NOT NULL REFERENCES pedido(id),
+tipo VARCHAR(1O) NOT NULL,
+chave VARCHAR(50),
+status VARCHAR(20) NOT NULL DEFAULT 'PENDENTE',
+creates_at TIMESTAMP NOT NULL DEFAULT now(),
+update_at TIMESTAMP NOT NULL DEFAULT now()
+);
+
+CREATE INDEX idx_invoice_pedido ON invoice(pedido_id);
