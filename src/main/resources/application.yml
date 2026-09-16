@@ -66,3 +66,12 @@ melhorenvio:
   user-agent: "ecommercie/1.0 mpmiguel2007@gmail.com"
   base-url: https://sandbox.melhorenvio.com.br
 
+features:
+  fiscal:
+    enabled: ${FISCAL_ENABLED:false}
+    tipo: ${FISCAL_TIPO:DCE}
+
+focusnfe:
+  token: ${FOCUSNFE_TOKEN:}
+  base-url: ${FOCUSNFE_BASE_URL:https://homologacao.focusnfe.com.br}
+
