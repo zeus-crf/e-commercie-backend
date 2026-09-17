@@ -15,7 +15,7 @@ import lombok.*;
 @Builder
 public class Invoice extends BaseEntity {
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @OneToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "pedido_id", nullable = false, unique = true)
     private Order order;
 
@@ -23,7 +23,8 @@ public class Invoice extends BaseEntity {
     @Column(nullable = false)
     private FiscalDocumentType tipo;
 
-    @Column(nullable = false)
+    // Nulo quando o provider é o NoopFiscalProvider (toggle fiscal desligado).
+    @Column
     private String chave;
 
     @Column(nullable = false)
