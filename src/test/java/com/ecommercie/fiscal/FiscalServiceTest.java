@@ -263,7 +263,6 @@ class FiscalServiceTest {
 
         Optional<Invoice> resultado = fiscalService.buscarPorPedido(pedido.getId());
 
-
         assertThat(resultado)
                 .isPresent()
                 .get()
