@@ -1,6 +1,7 @@
 package com.ecommercie.fiscal.model;
 
 import com.ecommercie.fiscal.enums.FiscalDocumentType;
+import com.ecommercie.fiscal.enums.InvoiceStatus;
 import com.ecommercie.pedido.models.Order;
 import com.ecommercie.shared.BaseEntity;
 import jakarta.persistence.*;
@@ -27,6 +28,7 @@ public class Invoice extends BaseEntity {
     @Column
     private String chave;
 
+    @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private String status;
+    private InvoiceStatus status;
 }

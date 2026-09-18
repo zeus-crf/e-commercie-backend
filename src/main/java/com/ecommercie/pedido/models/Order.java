@@ -9,7 +9,6 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.random.RandomGenerator;
 
 @Entity
 @Table(name = "pedido")
@@ -31,6 +30,8 @@ public class Order extends BaseEntity {
     @Setter(AccessLevel.NONE)
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false)
+    // Sem @Builder.Default o Lombok ignora o valor inicial e o builder devolve status null.
+    @Builder.Default
     private StatusOrder status = StatusOrder.AGUARDANDO_PAGAMENTO;
 
     @Column(nullable = false, name = "valor_itens")
@@ -61,7 +62,9 @@ public class Order extends BaseEntity {
     @Column(name = "refunded_at")
     private LocalDateTime refundedAt;
 
-    
+
+
+
     public void markPaid() {
         if (this.status != StatusOrder.AGUARDANDO_PAGAMENTO) {
             throw new IllegalArgumentException("Só um pedido aguardando pagamento pode ser pago");

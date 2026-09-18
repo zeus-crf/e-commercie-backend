@@ -1,5 +1,6 @@
 package com.ecommercie.outbox.dispatcher;
 
+import com.ecommercie.fiscal.service.FiscalService;
 import com.ecommercie.outbox.OutboxTypes;
 import com.ecommercie.outbox.models.OutboxEvent;
 import com.ecommercie.outbox.service.EmailService;
@@ -13,6 +14,7 @@ public class OutboxDispatcher {
 
     private final EmailService emailService;
     private final ObjectMapper objectMapper;
+    private final FiscalService fiscalService;
 
 
     public void dispatch(OutboxEvent event) throws Exception {
@@ -46,6 +48,11 @@ public class OutboxDispatcher {
             case OutboxTypes.EMAIL_REEMBOLSO_CONFIRMADO -> {
                 var p = objectMapper.readValue(event.getPayload(), EmailPayload.class);
                 emailService.enviarReembolsoConfirmado(p.orderId(), p.email());
+            }
+
+            case OutboxTypes.FISCAL_EMISSAO -> {
+                var p = objectMapper.readValue(event.getPayload(), FiscalService.FiscalPayload.class);
+                fiscalService.emitirParaPedido(p.orderId());
             }
 
             default -> throw new IllegalStateException("Tipo de outbox desconhecido: " + event.getType());
