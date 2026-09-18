@@ -1,5 +1,6 @@
 package com.ecommercie.melhor_envio.client;
 
+import com.ecommercie.fiscal.service.FiscalService;
 import com.ecommercie.melhor_envio.ShippingProvider;
 import com.ecommercie.melhor_envio.dto.*;
 import com.ecommercie.melhor_envio.models.Shipment;
@@ -35,16 +36,19 @@ public class MelhorEnvioClient implements ShippingProvider {
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final OrderRepository orderRepository;
     private final ShippimentRepository shippimentRepository;
+    private final FiscalService fiscalService;
+
 
     public MelhorEnvioClient(
             @Value("${melhorenvio.base-url}") String baseUrl,
             @Value("${melhorenvio.token}") String token,
             @Value("${melhorenvio.user-agent}") String userAgent,
             OrderRepository orderRepository,
-            ShippimentRepository shippimentRepository
+            ShippimentRepository shippimentRepository, FiscalService fiscalService
     ) {
         this.orderRepository = orderRepository;
         this.shippimentRepository = shippimentRepository;
+        this.fiscalService = fiscalService;
         this.restClient = RestClient.builder()
                 .baseUrl(baseUrl)
                 .defaultHeader("Authorization", token)
@@ -129,6 +133,23 @@ public class MelhorEnvioClient implements ShippingProvider {
 
         List<MeCartRequest.MeVolume> volumes = new ArrayList<>();
 
+        MeCartRequest.MeOptions options = null;
+        var invoiceOpt = fiscalService.buscarPorPedido(order.getId());
+        if (invoiceOpt.isPresent()){
+            var invoice = invoiceOpt.get();
+            if (invoice.getChave() != null && !invoice.getChave().isBlank()){
+                options = switch (invoice.getTipo()){
+                    case DCE -> new MeCartRequest.MeOptions(
+                            new MeCartRequest.MeOptions.MeInvoice(invoice.getChave()), null
+                    );
+                    case NFE -> new MeCartRequest.MeOptions(
+                            new MeCartRequest.MeOptions.MeInvoice(invoice.getChave()), null
+                    );
+                    default -> null;
+                };
+            }
+        }
+
         for (OrderItem item : order.getItens()) {
 
             MeCartRequest.MeVolume volume = new MeCartRequest.MeVolume(
@@ -151,7 +172,8 @@ public class MelhorEnvioClient implements ShippingProvider {
                 address,
                 products,
                 volumes,
-                insuranceValue.compareTo(BigDecimal.ZERO) > 0 ? insuranceValue : null
+                insuranceValue.compareTo(BigDecimal.ZERO) > 0 ? insuranceValue : null,
+                options
         );
 
         try {

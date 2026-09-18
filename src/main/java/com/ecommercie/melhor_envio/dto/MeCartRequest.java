@@ -13,7 +13,8 @@ public record MeCartRequest(
         MeAddress to,
         List<MeProduct> products,
         List<MeVolume> volumes,
-        @JsonProperty("insurance_value") BigDecimal insurance_value
+        @JsonProperty("insurance_value") BigDecimal insurance_value,
+        MeOptions options
 ) {
 
     public record MeAddress(
@@ -42,4 +43,10 @@ public record MeCartRequest(
             BigDecimal height,
             BigDecimal length
     ) {}
+
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    public record MeOptions(MeInvoice invoice, MeDce dce) {
+        public record MeInvoice(String key) {}
+        public record MeDce(String key) {}
+    }
 }
