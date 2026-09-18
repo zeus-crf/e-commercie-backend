@@ -90,6 +90,7 @@ public class WebhookService {
                 .orElseThrow(() -> new EntityNotFoundException("Pedido não encontrado: " + orderId));
 
         order.markPaid();
+        outboxService.registrar(OutboxTypes.FISCAL_EMISSAO, order.getUser().getEmail());
         order.setMpPaymentId(Long.parseLong(paymentId));
         orderRepository.save(order);
 
