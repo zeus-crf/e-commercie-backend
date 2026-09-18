@@ -14,6 +14,7 @@ import com.ecommercie.fiscal.enums.InvoiceStatus;
 import com.ecommercie.fiscal.model.Invoice;
 import com.ecommercie.fiscal.repository.InvoiceRepository;
 import com.ecommercie.fiscal.service.FiscalService;
+import com.ecommercie.outbox.OutboxTypes;
 import com.ecommercie.outbox.repository.OutboxEventRepository;
 import com.ecommercie.pedido.models.Address;
 import com.ecommercie.pedido.models.Order;
@@ -245,7 +246,7 @@ class FiscalServiceTest {
         fiscalService.emitirParaPedido(pedido.getId());
 
         assertThat(invoiceRepository.findByOrderId(pedido.getId())).get().satisfies(inv -> {
-            assertThat(invoiceRepository.findByOrderId(inv.getOrder().getId()).equals(pedido.getId()));
+            assertThat(inv.getOrder().getId()).isEqualTo(pedido.getId());
                     assertThat(inv.getTipo()).isEqualTo(FiscalDocumentType.DCE);
                         assertThat(inv.getChave()).isEqualTo("123456");
                         assertThat(inv.getStatus()).isEqualTo(InvoiceStatus.AUTORIZADO);
@@ -277,6 +278,20 @@ class FiscalServiceTest {
                             .isEqualTo("123");
                 });
     }
+
+    @Test
+    void deveAgendarEmissao() {
+        Order pedido = pedidoPadrao();
+
+        fiscalService.agendarEmissao(pedido.getId());
+
+        assertThat(outboxEventRepository.findAll())
+                .singleElement()
+                .satisfies(ev -> {
+                    assertThat(ev.getType()).isEqualTo(OutboxTypes.FISCAL_EMISSAO);
+                    assertThat(ev.getPayload()).contains(pedido.getId());
+                });
+    } 
 
 
 }
