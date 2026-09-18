@@ -1,6 +1,7 @@
 package com.ecommercie.mercado_pago.service;
 
 import com.ecommercie.estoque.service.InventoryService;
+import com.ecommercie.fiscal.service.FiscalService;
 import com.ecommercie.mercado_pago.WebhookEventRepository;
 import com.ecommercie.mercado_pago.dtos.MercadoPagoNotification;
 import com.ecommercie.mercado_pago.models.WebhookEvent;
@@ -34,6 +35,7 @@ public class WebhookService {
     private final OrderRepository orderRepository;
     private final InventoryService inventoryService;
     private final OutboxService outboxService;
+    private final FiscalService fiscalService;
 
     @Transactional
     public void processarNotificacao(MercadoPagoNotification request) throws MPException, MPApiException {
@@ -90,6 +92,7 @@ public class WebhookService {
                 .orElseThrow(() -> new EntityNotFoundException("Pedido não encontrado: " + orderId));
 
         order.markPaid();
+        outboxService.registrar(OutboxTypes.FISCAL_EMISSAO, order.getUser().getEmail());
         order.setMpPaymentId(Long.parseLong(paymentId));
         orderRepository.save(order);
 
