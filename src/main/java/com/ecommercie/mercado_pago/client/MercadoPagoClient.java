@@ -71,7 +71,7 @@ public class MercadoPagoClient implements PaymentGateway {
 
             Preference preference = client.create(request);
 
-            return new PaymentPreference(preference.getId(), preference.getSandboxInitPoint());
+            return new PaymentPreference(preference.getId(), preference.getInitPoint());
 
 
         } catch (MPApiException ex) {

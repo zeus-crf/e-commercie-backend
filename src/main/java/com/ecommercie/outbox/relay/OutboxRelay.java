@@ -27,7 +27,11 @@ public class OutboxRelay {
     private static final int MAX_ATTEMPTS = 5;
     private static final Duration BACKOFF = Duration.ofMinutes(1);
 
-    @Scheduled(fixedDelay = 5000)
+    // Intervalo configurável: o perfil de teste empurra o initial-delay para longe, porque o
+    // agendador rodando em paralelo disputa os eventos com os testes que chamam processOutbox()
+    // na mão (o FOR UPDATE SKIP LOCKED faz a chamada explícita pular a linha travada pelo job).
+    @Scheduled(fixedDelayString = "${outbox.relay.fixed-delay:5000}",
+               initialDelayString = "${outbox.relay.initial-delay:0}")
     @Transactional
     public void processOutbox() {
         var lote = outboxEventRepository.lockBatchForProcessing(BATCH_SIZE);

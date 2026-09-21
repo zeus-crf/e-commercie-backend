@@ -139,8 +139,9 @@ public class MelhorEnvioClient implements ShippingProvider {
             var invoice = invoiceOpt.get();
             if (invoice.getChave() != null && !invoice.getChave().isBlank()){
                 options = switch (invoice.getTipo()){
+                    // DC-e vai em options.dce.key; NF-e em options.invoice.key.
                     case DCE -> new MeCartRequest.MeOptions(
-                            new MeCartRequest.MeOptions.MeInvoice(invoice.getChave()), null
+                            null, new MeCartRequest.MeOptions.MeDce(invoice.getChave())
                     );
                     case NFE -> new MeCartRequest.MeOptions(
                             new MeCartRequest.MeOptions.MeInvoice(invoice.getChave()), null
