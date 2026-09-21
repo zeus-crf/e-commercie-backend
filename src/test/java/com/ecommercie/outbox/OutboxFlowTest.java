@@ -8,6 +8,7 @@ import com.ecommercie.outbox.relay.OutboxRelay;
 import com.ecommercie.outbox.repository.OutboxEventRepository;
 import com.ecommercie.outbox.service.EmailService;
 import com.ecommercie.outbox.service.OutboxService;
+import com.ecommercie.support.DatabaseCleaner;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -39,12 +40,13 @@ class OutboxFlowTest {
     @Autowired OutboxService outboxService;
     @Autowired OutboxRelay outboxRelay;
     @Autowired OutboxEventRepository outboxEventRepository;
+    @Autowired DatabaseCleaner databaseCleaner;
 
     @MockitoBean EmailService emailService;   // substitui o bean real por um mock
 
     @BeforeEach
     void limpar() {
-        outboxEventRepository.deleteAll();
+        databaseCleaner.limparTudo();
     }
 
     private void registrarConfirmacaoPedido(String orderId, String email) {

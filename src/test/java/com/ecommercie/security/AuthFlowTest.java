@@ -7,6 +7,7 @@ import com.ecommercie.security.models.User;
 import com.ecommercie.security.repository.RefreshTokenRepository;
 import com.ecommercie.security.repository.UserRepository;
 import jakarta.servlet.http.Cookie;
+import com.ecommercie.support.DatabaseCleaner;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -48,13 +49,12 @@ class AuthFlowTest {
     @Autowired RefreshTokenRepository refreshTokenRepository;
     @Autowired CartRepository cartRepository;
     @Autowired PasswordEncoder passwordEncoder;
+    @Autowired DatabaseCleaner databaseCleaner;
 
     // isola cada teste: carrinhos e refresh_tokens (FKs) antes de usuarios
     @BeforeEach
     void limpar() {
-        cartRepository.deleteAll();
-        refreshTokenRepository.deleteAll();
-        userRepository.deleteAll();
+        databaseCleaner.limparTudo();
     }
 
     // ----------------- helpers -----------------

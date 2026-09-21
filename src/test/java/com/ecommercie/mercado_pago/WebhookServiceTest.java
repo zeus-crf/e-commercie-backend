@@ -26,6 +26,7 @@ import com.ecommercie.security.repository.RefreshTokenRepository;
 import com.ecommercie.security.repository.UserRepository;
 import com.mercadopago.client.payment.PaymentClient;
 import com.mercadopago.resources.payment.Payment;
+import com.ecommercie.support.DatabaseCleaner;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.MockedConstruction;
@@ -70,6 +71,7 @@ class WebhookServiceTest {
     @Autowired CategoryRepository categoryRepository;
     @Autowired RefreshTokenRepository refreshTokenRepository;
     @Autowired UserRepository userRepository;
+    @Autowired DatabaseCleaner databaseCleaner;
 
     private final AtomicInteger seq = new AtomicInteger();
 
@@ -78,16 +80,7 @@ class WebhookServiceTest {
     // Limpa na ordem das FKs: invoice e pedido_item dependem de pedido; pedido depende de usuario.
     @BeforeEach
     void limpar() {
-        webhookEventRepository.deleteAll();
-        invoiceRepository.deleteAll();
-        outboxEventRepository.deleteAll();
-        orderRepository.deleteAll();
-        cartRepository.deleteAll();
-        inventoryItemRepository.deleteAll();
-        productRepository.deleteAll();
-        categoryRepository.deleteAll();
-        refreshTokenRepository.deleteAll();
-        userRepository.deleteAll();
+        databaseCleaner.limparTudo();
     }
 
     // ----------------- testes -----------------
