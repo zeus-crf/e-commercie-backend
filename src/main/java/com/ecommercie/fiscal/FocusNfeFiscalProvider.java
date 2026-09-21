@@ -34,10 +34,12 @@ public class FocusNfeFiscalProvider implements FiscalProvider {
             String cnpj,
             String inscricaoEstadual,
             String uf,
-            Integer regimeTributario,       // 1 = Simples Nacional, 3 = Regime Normal
-            String icmsSituacaoTributaria,  // CSOSN (Simples) ou CST (Normal)
+            Integer regimeTributario,
+            String icmsSituacaoTributaria,
             String pisSituacaoTributaria,
-            String cofinsSituacaoTributaria
+            String cofinsSituacaoTributaria,
+            String tipoEmitente,          // DC-e: "1" a "4"
+            String modalidadeTransporte
     ) {}
 
     public FocusNfeFiscalProvider(FiscalDocumentType tipo, String token, String baseUrl, Emitente emitente) {
