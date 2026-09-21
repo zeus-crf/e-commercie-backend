@@ -6,6 +6,12 @@ spring:
     hibernate:
       ddl-auto: validate
 
+# O relay agendado fica desligado nos testes: quem dispara processOutbox() é o próprio teste.
+# Sem isso o job de fundo disputa os eventos e o resultado vira aleatório.
+outbox:
+  relay:
+    initial-delay: 86400000
+
 melhorenvio:
   token: Bearer fake-token-test
   origin-cep: "01310100"

@@ -3,6 +3,7 @@ package com.ecommercie.fiscal.controller;
 import com.ecommercie.fiscal.dto.InvoiceResponse;
 import com.ecommercie.fiscal.service.FiscalService;
 import com.ecommercie.shared.ApiResponse;
+import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -23,6 +24,7 @@ public class InvoiceAdminController {
         return fiscalService.buscarPorPedido(orderId)
                 .map(inv ->
                         ResponseEntity.ok(ApiResponse.ok(InvoiceResponse.from(inv))))
-                .orElse(ResponseEntity.ok(ApiResponse.ok(null)));
+                .orElseThrow(() ->
+                        new EntityNotFoundException("Nenhum documento fiscal emitido para o pedido: " + orderId));
     }
 }

@@ -48,8 +48,24 @@ class OutboxFlowTest {
     }
 
     private void registrarConfirmacaoPedido(String orderId, String email) {
-        outboxService.registrar(OutboxTypes.EMAIL_CONFIRMACAO_PEDIDO,
+        registrarElegivel(OutboxTypes.EMAIL_CONFIRMACAO_PEDIDO,
                 new OutboxDispatcher.EmailPayload(orderId, email));
+    }
+
+    /**
+     * Registra o evento e joga o next_attempt_at para trás.
+     *
+     * O relay filtra por {@code next_attempt_at <= now()}, onde o next_attempt_at é escrito pela
+     * JVM (relógio do host) e o now() vem do Postgres (relógio do container). Entre registrar e
+     * processar passam poucos milissegundos, e o relógio do Docker oscila em relação ao host — se
+     * ele estiver atrás nesse instante, o evento não é elegível e o teste falha sem motivo real.
+     * A folga de um minuto torna o teste determinístico sem mudar o que ele exercita.
+     */
+    private void registrarElegivel(String type, Object payload) {
+        outboxService.registrar(type, payload);
+        OutboxEvent evento = outboxEventRepository.findAll().get(0);
+        evento.setNextAttemptAt(LocalDateTime.now().minusMinutes(1));
+        outboxEventRepository.save(evento);
     }
 
     @Test
@@ -104,7 +120,7 @@ class OutboxFlowTest {
 
     @Test
     void relay_tipoDesconhecido_reagenda_semEnviarEmail() {
-        outboxService.registrar("TIPO_INEXISTENTE",
+        registrarElegivel("TIPO_INEXISTENTE",
                 new OutboxDispatcher.EmailPayload("pedido-1", "cli@test.com"));
 
         outboxRelay.processOutbox();

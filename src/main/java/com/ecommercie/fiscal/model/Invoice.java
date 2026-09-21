@@ -32,3 +32,4 @@ public class Invoice extends BaseEntity {
     @Column(nullable = false)
     private InvoiceStatus status;
 }
+
