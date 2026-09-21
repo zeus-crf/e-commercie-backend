@@ -37,9 +37,8 @@ public class FocusNfeFiscalProvider implements FiscalProvider {
             Integer regimeTributario,
             String icmsSituacaoTributaria,
             String pisSituacaoTributaria,
-            String cofinsSituacaoTributaria,
-            String tipoEmitente,          // DC-e: "1" a "4"
-            String modalidadeTransporte
+            String cofinsSituacaoTributaria
+            // DC-e: "1" a "4"
     ) {}
 
     public FocusNfeFiscalProvider(FiscalDocumentType tipo, String token, String baseUrl, Emitente emitente) {

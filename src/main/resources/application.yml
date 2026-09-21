@@ -74,4 +74,6 @@ features:
 focusnfe:
   token: ${FOCUSNFE_TOKEN:}
   base-url: ${FOCUSNFE_BASE_URL:https://homologacao.focusnfe.com.br}
+  tipo-emitente: ${FOCUSNFE_TIPO_EMITENTE:2}
+  modalidade-transporte: ${FOCUSNFE_MODALIDADE_TRANSPORTE:0}
 
