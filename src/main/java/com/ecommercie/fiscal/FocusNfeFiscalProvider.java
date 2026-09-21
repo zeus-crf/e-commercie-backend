@@ -37,8 +37,9 @@ public class FocusNfeFiscalProvider implements FiscalProvider {
             Integer regimeTributario,
             String icmsSituacaoTributaria,
             String pisSituacaoTributaria,
-            String cofinsSituacaoTributaria
-            // DC-e: "1" a "4"
+            String cofinsSituacaoTributaria,
+            String tipoEmitente,          // DC-e: "1" a "4"
+            String modalidadeTransporte   // DC-e: "0", "1" ou "2"
     ) {}
 
     public FocusNfeFiscalProvider(FiscalDocumentType tipo, String token, String baseUrl, Emitente emitente) {
@@ -92,33 +93,19 @@ public class FocusNfeFiscalProvider implements FiscalProvider {
     }
 
     /**
-     * Monta o corpo da NF-e conforme a referencia de campos da Focus NFe.
-     * Os campos do destinatario sao achatados no topo (sufixo _destinatario) e o array de itens
-     * chama-se "items" (em ingles) na NF-e — diferente do "itens" da DC-e.
+     * Payload da DC-e conforme https://doc.focusnfe.com.br/reference/emitir_dce.md
+     * Obrigatórios: cnpj_emitente, tipo_emitente, nome_destinatario, itens, modalidade_transporte.
+     * A loja é o remetente (emitente); o cliente é o destinatário.
      */
-    private Map<String, Object> montarPayloadNfe(Order order) {
+    private Map<String, Object> montarPayloadDce(Order order) {
         var user = order.getUser();
         var address = order.getAddress();
-
-        BigDecimal valorFrete = order.getValorFrete() != null ? order.getValorFrete() : BigDecimal.ZERO;
-        BigDecimal valorTotal = order.getValorItens().add(valorFrete);
-
         String documento = somenteDigitos(user.getCpfCnpj());
 
         Map<String, Object> payload = new LinkedHashMap<>();
-        payload.put("natureza_operacao", "Venda de mercadoria");
-        payload.put("data_emissao", ZonedDateTime.now(ZONA_FISCAL).format(DateTimeFormatter.ISO_OFFSET_DATE_TIME));
-        payload.put("tipo_documento", 1);                 // 1 = saida
-        payload.put("finalidade_emissao", 1);             // 1 = normal
-        payload.put("local_destino", localDestino(address.getUf()));
-        payload.put("consumidor_final", 1);
-        payload.put("presenca_comprador", 2);             // 2 = operacao pela internet
-        payload.put("modalidade_frete", 0);               // 0 = por conta do emitente (CIF)
-        payload.put("valor_frete", valorFrete);
-
         payload.put("cnpj_emitente", somenteDigitos(emitente.cnpj()));
-        payload.put("inscricao_estadual_emitente", emitente.inscricaoEstadual());
-        payload.put("regime_tributario_emitente", emitente.regimeTributario());
+        payload.put("tipo_emitente", emitente.tipoEmitente());
+        payload.put("modalidade_transporte", emitente.modalidadeTransporte());
 
         payload.put("nome_destinatario", user.getNome());
         if (documento.length() == 11) {
@@ -126,49 +113,74 @@ public class FocusNfeFiscalProvider implements FiscalProvider {
         } else {
             payload.put("cnpj_destinatario", documento);
         }
-        payload.put("indicador_inscricao_estadual_destinatario", 9); // 9 = nao contribuinte
         payload.put("logradouro_destinatario", address.getLogradouro());
         payload.put("numero_destinatario", address.getNumero());
         payload.put("bairro_destinatario", address.getBairro());
         payload.put("municipio_destinatario", address.getCidade());
         payload.put("uf_destinatario", address.getUf());
         payload.put("cep_destinatario", somenteDigitos(address.getCep()));
+        payload.put("email_destinatario", user.getEmail());
 
-        payload.put("valor_total", valorTotal);
-        payload.put("fcp_valor_total", BigDecimal.ZERO);
-        payload.put("items", montarItens(order));
+        payload.put("itens", montarItensDce(order));
+        payload.put("informacoes_complementares", "Pedido " + order.getId());
 
         return payload;
     }
 
-    private List<Map<String, Object>> montarItens(Order order) {
-        List<Map<String, Object>> items = new ArrayList<>();
+    private List<Map<String, Object>> montarItensDce(Order order) {
+        List<Map<String, Object>> itens = new ArrayList<>();
         int numero = 1;
 
         for (OrderItem item : order.getItens()) {
-            BigDecimal valorBruto = item.getPrecoUnitario().multiply(BigDecimal.valueOf(item.getQuantidade()));
+            BigDecimal valorProduto = item.getPrecoUnitario()
+                    .multiply(BigDecimal.valueOf(item.getQuantidade()));
 
             Map<String, Object> linha = new LinkedHashMap<>();
-            linha.put("numero_item", numero);
-            linha.put("codigo_produto", item.getProduct() != null ? item.getProduct().getId() : "SKU-" + numero);
-            linha.put("descricao", item.getNomeProduto());
+            linha.put("numero", String.valueOf(numero));
+            linha.put("descricao_produto", item.getNomeProduto());
             linha.put("codigo_ncm", item.getNcm());
-            linha.put("cfop", item.getCfop());
-            linha.put("unidade_comercial", UNIDADE_PADRAO);
-            linha.put("quantidade_comercial", item.getQuantidade());
-            linha.put("valor_unitario_comercial", item.getPrecoUnitario());
-            linha.put("valor_bruto", valorBruto);
-            linha.put("icms_origem", item.getOrigem());
-            linha.put("icms_situacao_tributaria", emitente.icmsSituacaoTributaria());
-            linha.put("pis_situacao_tributaria", emitente.pisSituacaoTributaria());
-            linha.put("cofins_situacao_tributaria", emitente.cofinsSituacaoTributaria());
+            linha.put("quantidade", item.getQuantidade());
+            linha.put("valor_unitario", item.getPrecoUnitario());
+            linha.put("valor_produto", valorProduto);
 
-            items.add(linha);
+            itens.add(linha);
             numero++;
         }
 
-        return items;
+        return itens;
     }
+
+
+    private Map<String, Object> montarPayloadNfe(Order order) {
+        var user = order.getUser();
+        var address = order.getAddress();
+        String documento = somenteDigitos(user.getCpfCnpj());
+
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("cnpj_emitente", somenteDigitos(emitente.cnpj()));
+        payload.put("tipo_emitente", emitente.tipoEmitente());
+        payload.put("modalidade_transporte", emitente.modalidadeTransporte());
+
+        payload.put("nome_destinatario", user.getNome());
+        if (documento.length() == 11) {
+            payload.put("cpf_destinatario", documento);
+        } else {
+            payload.put("cnpj_destinatario", documento);
+        }
+        payload.put("logradouro_destinatario", address.getLogradouro());
+        payload.put("numero_destinatario", address.getNumero());
+        payload.put("bairro_destinatario", address.getBairro());
+        payload.put("municipio_destinatario", address.getCidade());
+        payload.put("uf_destinatario", address.getUf());
+        payload.put("cep_destinatario", somenteDigitos(address.getCep()));
+        payload.put("email_destinatario", user.getEmail());
+
+        payload.put("itens", montarItensDce(order));
+        payload.put("informacoes_complementares", "Pedido " + order.getId());
+
+        return payload;
+    }
+
 
     /**
      * A Focus responde 201 (autorizado, ja com chave) ou 202 (processando_autorizacao, sem chave).
