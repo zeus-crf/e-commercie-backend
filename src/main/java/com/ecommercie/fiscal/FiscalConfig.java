@@ -28,7 +28,8 @@ public class FiscalConfig {
             @Value("${focusnfe.emitente.modalidade-transporte:0}") String modalidadeTransporte
     ){
         var emitente = new FocusNfeFiscalProvider.Emitente(
-                cnpj, inscricaoEstadual, uf, regimeTributario, icmsCst, pisCst, cofinsCst
+                cnpj, inscricaoEstadual, uf, regimeTributario, icmsCst, pisCst, cofinsCst,
+                tipoEmitente, modalidadeTransporte
         );
 
         return new FocusNfeFiscalProvider(

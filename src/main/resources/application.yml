@@ -74,6 +74,15 @@ features:
 focusnfe:
   token: ${FOCUSNFE_TOKEN:}
   base-url: ${FOCUSNFE_BASE_URL:https://homologacao.focusnfe.com.br}
-  tipo-emitente: ${FOCUSNFE_TIPO_EMITENTE:2}
-  modalidade-transporte: ${FOCUSNFE_MODALIDADE_TRANSPORTE:0}
+  # Dados do emissor — do cliente, nao do codigo. Confirmar com o contador antes de ligar o toggle.
+  emitente:
+    cnpj: ${FOCUSNFE_CNPJ:}
+    inscricao-estadual: ${FOCUSNFE_IE:}
+    uf: ${FOCUSNFE_UF:}
+    regime-tributario: ${FOCUSNFE_REGIME:1}          # 1 = Simples Nacional, 3 = Regime Normal
+    icms-cst: ${FOCUSNFE_ICMS_CST:102}               # CSOSN (Simples) ou CST (Normal)
+    pis-cst: ${FOCUSNFE_PIS_CST:07}
+    cofins-cst: ${FOCUSNFE_COFINS_CST:07}
+    tipo-emitente: ${FOCUSNFE_TIPO_EMITENTE:2}       # DC-e: "1" a "4"
+    modalidade-transporte: ${FOCUSNFE_MODALIDADE_TRANSPORTE:0}  # DC-e: "0", "1" ou "2"
 
