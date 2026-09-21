@@ -34,10 +34,12 @@ public class FocusNfeFiscalProvider implements FiscalProvider {
             String cnpj,
             String inscricaoEstadual,
             String uf,
-            Integer regimeTributario,       // 1 = Simples Nacional, 3 = Regime Normal
-            String icmsSituacaoTributaria,  // CSOSN (Simples) ou CST (Normal)
+            Integer regimeTributario,
+            String icmsSituacaoTributaria,
             String pisSituacaoTributaria,
-            String cofinsSituacaoTributaria
+            String cofinsSituacaoTributaria,
+            String tipoEmitente,          // DC-e: "1" a "4"
+            String modalidadeTransporte   // DC-e: "0", "1" ou "2"
     ) {}
 
     public FocusNfeFiscalProvider(FiscalDocumentType tipo, String token, String baseUrl, Emitente emitente) {
@@ -89,6 +91,65 @@ public class FocusNfeFiscalProvider implements FiscalProvider {
 
         return interpretarResposta(response, order.getId(), ref);
     }
+
+    /**
+     * Payload da DC-e conforme https://doc.focusnfe.com.br/reference/emitir_dce.md
+     * Obrigatórios: cnpj_emitente, tipo_emitente, nome_destinatario, itens, modalidade_transporte.
+     * A loja é o remetente (emitente); o cliente é o destinatário.
+     */
+    private Map<String, Object> montarPayloadDce(Order order) {
+        var user = order.getUser();
+        var address = order.getAddress();
+        String documento = somenteDigitos(user.getCpfCnpj());
+
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("cnpj_emitente", somenteDigitos(emitente.cnpj()));
+        payload.put("tipo_emitente", emitente.tipoEmitente());
+        payload.put("modalidade_transporte", emitente.modalidadeTransporte());
+
+        payload.put("nome_destinatario", user.getNome());
+        if (documento.length() == 11) {
+            payload.put("cpf_destinatario", documento);
+        } else {
+            payload.put("cnpj_destinatario", documento);
+        }
+        payload.put("logradouro_destinatario", address.getLogradouro());
+        payload.put("numero_destinatario", address.getNumero());
+        payload.put("bairro_destinatario", address.getBairro());
+        payload.put("municipio_destinatario", address.getCidade());
+        payload.put("uf_destinatario", address.getUf());
+        payload.put("cep_destinatario", somenteDigitos(address.getCep()));
+        payload.put("email_destinatario", user.getEmail());
+
+        payload.put("itens", montarItensDce(order));
+        payload.put("informacoes_complementares", "Pedido " + order.getId());
+
+        return payload;
+    }
+
+    private List<Map<String, Object>> montarItensDce(Order order) {
+        List<Map<String, Object>> itens = new ArrayList<>();
+        int numero = 1;
+
+        for (OrderItem item : order.getItens()) {
+            BigDecimal valorProduto = item.getPrecoUnitario()
+                    .multiply(BigDecimal.valueOf(item.getQuantidade()));
+
+            Map<String, Object> linha = new LinkedHashMap<>();
+            linha.put("numero", String.valueOf(numero));
+            linha.put("descricao_produto", item.getNomeProduto());
+            linha.put("codigo_ncm", item.getNcm());
+            linha.put("quantidade", item.getQuantidade());
+            linha.put("valor_unitario", item.getPrecoUnitario());
+            linha.put("valor_produto", valorProduto);
+
+            itens.add(linha);
+            numero++;
+        }
+
+        return itens;
+    }
+
 
     /**
      * Monta o corpo da NF-e conforme a referencia de campos da Focus NFe.
@@ -169,6 +230,7 @@ public class FocusNfeFiscalProvider implements FiscalProvider {
         return items;
     }
 
+
     /**
      * A Focus responde 201 (autorizado, ja com chave) ou 202 (processando_autorizacao, sem chave).
      * No caso 202 lancamos excecao: o outbox reprocessa o evento e a consulta no inicio de
@@ -231,37 +293,76 @@ public class FocusNfeFiscalProvider implements FiscalProvider {
         return valor == null ? "" : valor.replaceAll("\\D", "");
     }
 
-    public FiscalDocument emitirDCE(Order order, String ref) {
-        var itens = order.getItens().stream().map(i -> Map.of(
-                "descricao", i.getNomeProduto(),
-                "quantdade", i.getQuantidade(),
-                "valor" , i.getPrecoUnitario().multiply(BigDecimal.valueOf(i.getQuantidade()))
-        )).toList();
+    private FiscalDocument emitirDCE(Order order, String ref) {
+        FiscalDocument jaEmitida = consultarDce(ref);
+        if (jaEmitida != null) {
+            log.info("DC-e já autorizada para pedido {} (ref={}) — reaproveitando chave", order.getId(), ref);
+            return jaEmitida;
+        }
 
-        var payload = Map.of(
-                "remetente_nome", order.getUser().getNome(),
-                "remetente_cpf_cnpj", order.getUser().getCpfCnpj(),
-                "destinatario_nome", order.getUser().getNome(),
-                "destinatario_cep", order.getAddress().getCep(),
-                "itens", itens
-        );
+        Map<String, Object> payload = montarPayloadDce(order);
 
+        Map<String, Object> response;
         try {
             @SuppressWarnings("unchecked")
-            Map<String, Object> response = restClient.post()
-                    .uri("/v2/dce?ref=", ref)
+            Map<String, Object> resp = restClient.post()
+                    .uri("/v2/dce?ref={ref}", ref)
                     .body(payload)
                     .retrieve()
                     .body(Map.class);
-
-            String chave = (String) response.get("chave_acesso");
-            log.info("DC-e emitida com sucesso para pedido {}: chave={}", order.getId(), chave);
-
-            return new FiscalDocument(tipo, chave);
-
+            response = resp;
         } catch (Exception ex) {
             log.error("Erro ao emitir DC-e para pedido {}: {}", order.getId(), ex.getMessage());
             throw new RuntimeException("Falha na emissao de DC-e: " + ex.getMessage(), ex);
+        }
+
+        return interpretarRespostaDce(response, order.getId(), ref);
+    }
+
+    private FiscalDocument interpretarRespostaDce(Map<String, Object> response, String orderId, String ref) {
+        if (response == null) {
+            throw new RuntimeException("Falha na emissao de DC-e: resposta vazia da Focus NFe (ref=" + ref + ")");
+        }
+
+        String status = (String) response.get("status");
+        String chave = (String) response.get("chave");
+
+        if ("autorizado".equals(status) && chave != null && !chave.isBlank()) {
+            log.info("DC-e emitida com sucesso para pedido {}: chave={}", orderId, chave);
+            return new FiscalDocument(FiscalDocumentType.DCE, chave);
+        }
+
+        if ("processando_autorizacao".equals(status)) {
+            log.info("DC-e do pedido {} em processamento na SEFAZ (ref={}) — sera reconsultada", orderId, ref);
+            throw new RuntimeException("DC-e ainda em processamento na SEFAZ (ref=" + ref + ")");
+        }
+
+        String mensagem = (String) response.get("mensagem_sefaz");
+        log.error("DC-e rejeitada para pedido {} (ref={}): status={} mensagem={}", orderId, ref, status, mensagem);
+        throw new RuntimeException("Falha na emissao de DC-e: status=" + status + " mensagem=" + mensagem);
+    }
+
+    /** Devolve o documento se a ref já estiver autorizada; null se não existir ou ainda não tiver chave. */
+    private FiscalDocument consultarDce(String ref) {
+        try {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> response = restClient.get()
+                    .uri("/v2/dce/{ref}", ref)
+                    .retrieve()
+                    .body(Map.class);
+
+            if (response == null) {
+                return null;
+            }
+
+            String chave = (String) response.get("chave");
+            if ("autorizado".equals(response.get("status")) && chave != null && !chave.isBlank()) {
+                return new FiscalDocument(FiscalDocumentType.DCE, chave);
+            }
+            return null;
+        } catch (Exception ex) {
+            log.debug("Consulta previa da DC-e (ref={}) nao retornou documento: {}", ref, ex.getMessage());
+            return null;
         }
     }
 }

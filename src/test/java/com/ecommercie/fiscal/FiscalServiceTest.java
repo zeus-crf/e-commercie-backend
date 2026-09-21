@@ -25,6 +25,7 @@ import com.ecommercie.security.models.User;
 import com.ecommercie.security.repository.RefreshTokenRepository;
 import com.ecommercie.security.repository.UserRepository;
 import jakarta.persistence.EntityNotFoundException;
+import com.ecommercie.support.DatabaseCleaner;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -57,6 +58,7 @@ class FiscalServiceTest {
     @Autowired CategoryRepository categoryRepository;
     @Autowired RefreshTokenRepository refreshTokenRepository;
     @Autowired UserRepository userRepository;
+    @Autowired DatabaseCleaner databaseCleaner;
     @MockitoBean
     FiscalProvider fiscalProvider;
 
@@ -66,15 +68,7 @@ class FiscalServiceTest {
     // Limpa na ordem das FKs: invoice referencia pedido, pedido referencia usuario/produto.
     @BeforeEach
     void limpar() {
-        invoiceRepository.deleteAll();
-        outboxEventRepository.deleteAll();
-        orderRepository.deleteAll();
-        cartRepository.deleteAll();
-        inventoryItemRepository.deleteAll();
-        productRepository.deleteAll();
-        categoryRepository.deleteAll();
-        refreshTokenRepository.deleteAll();
-        userRepository.deleteAll();
+        databaseCleaner.limparTudo();
     }
 
     private Order pedidoPadrao() {

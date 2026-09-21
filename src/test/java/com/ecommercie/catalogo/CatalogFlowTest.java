@@ -12,6 +12,7 @@ import com.ecommercie.security.models.User;
 import com.ecommercie.security.repository.RefreshTokenRepository;
 import com.ecommercie.security.repository.UserRepository;
 import jakarta.servlet.http.Cookie;
+import com.ecommercie.support.DatabaseCleaner;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -57,16 +58,12 @@ class CatalogFlowTest {
     @Autowired UserRepository userRepository;
     @Autowired RefreshTokenRepository refreshTokenRepository;
     @Autowired PasswordEncoder passwordEncoder;
+    @Autowired DatabaseCleaner databaseCleaner;
 
     // isola cada teste na ordem das FKs: carrinho -> estoque -> produtos -> categorias, depois usuarios
     @BeforeEach
     void limpar() {
-        cartRepository.deleteAll();
-        inventoryItemRepository.deleteAll();
-        productRepository.deleteAll();
-        categoryRepository.deleteAll();
-        refreshTokenRepository.deleteAll();
-        userRepository.deleteAll();
+        databaseCleaner.limparTudo();
     }
 
     // ----------------- helpers -----------------

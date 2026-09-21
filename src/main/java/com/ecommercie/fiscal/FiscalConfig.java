@@ -23,10 +23,13 @@ public class FiscalConfig {
             @Value("${focusnfe.emitente.regime-tributario:1}") Integer regimeTributario,
             @Value("${focusnfe.emitente.icms-cst:102}") String icmsCst,
             @Value("${focusnfe.emitente.pis-cst:07}") String pisCst,
-            @Value("${focusnfe.emitente.cofins-cst:07}") String cofinsCst
+            @Value("${focusnfe.emitente.cofins-cst:07}") String cofinsCst,
+            @Value("${focusnfe.emitente.tipo-emitente:2}") String tipoEmitente,
+            @Value("${focusnfe.emitente.modalidade-transporte:0}") String modalidadeTransporte
     ){
         var emitente = new FocusNfeFiscalProvider.Emitente(
-                cnpj, inscricaoEstadual, uf, regimeTributario, icmsCst, pisCst, cofinsCst
+                cnpj, inscricaoEstadual, uf, regimeTributario, icmsCst, pisCst, cofinsCst,
+                tipoEmitente, modalidadeTransporte
         );
 
         return new FocusNfeFiscalProvider(

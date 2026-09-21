@@ -36,6 +36,19 @@ services:
       DB_PASSWORD: ${DB_PASSWORD}
       JWT_SECRET: ${JWT_SECRET}
       CORS_ORIGIN: ${CORS_ORIGIN}
+      # Credenciais dos provedores externos: sem elas a aplicacao nao sobe (proposital).
+      MP_ACCESS_TOKEN: ${MP_ACCESS_TOKEN}
+      MP_NOTIFICATION_URL: ${MP_NOTIFICATION_URL}
+      ME_TOKEN: ${ME_TOKEN}
+      SHIPPING_ORIGIN_CEP: ${SHIPPING_ORIGIN_CEP}
+      ME_USER_AGENT: ${ME_USER_AGENT}
+      ME_BASE_URL: ${ME_BASE_URL:-https://sandbox.melhorenvio.com.br}
+      # Fiscal — desligado por padrao
+      FISCAL_ENABLED: ${FISCAL_ENABLED:-false}
+      FISCAL_TIPO: ${FISCAL_TIPO:-DCE}
+      FOCUSNFE_TOKEN: ${FOCUSNFE_TOKEN:-}
+      FOCUSNFE_BASE_URL: ${FOCUSNFE_BASE_URL:-https://homologacao.focusnfe.com.br}
+      FOCUSNFE_CNPJ: ${FOCUSNFE_CNPJ:-}
     depends_on:
       postgres:
         condition: service_healthy

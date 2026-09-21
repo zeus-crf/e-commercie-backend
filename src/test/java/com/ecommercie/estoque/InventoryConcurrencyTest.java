@@ -1,6 +1,7 @@
 package com.ecommercie.estoque;
 
 import com.ecommercie.TestcontainersConfiguration;
+import com.ecommercie.carrinho.repository.CartRepository;
 import com.ecommercie.catalogo.models.Category;
 import com.ecommercie.catalogo.models.Product;
 import com.ecommercie.catalogo.repository.CategoryRepository;
@@ -8,6 +9,9 @@ import com.ecommercie.catalogo.repository.ProductRepository;
 import com.ecommercie.estoque.model.InventoryItem;
 import com.ecommercie.estoque.repository.InventoryItemRepository;
 import com.ecommercie.estoque.service.InventoryService;
+import com.ecommercie.fiscal.repository.InvoiceRepository;
+import com.ecommercie.pedido.repository.OrderRepository;
+import com.ecommercie.support.DatabaseCleaner;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -44,13 +48,18 @@ class InventoryConcurrencyTest {
     @Autowired InventoryItemRepository inventoryItemRepository;
     @Autowired ProductRepository productRepository;
     @Autowired CategoryRepository categoryRepository;
+    @Autowired InvoiceRepository invoiceRepository;
+    @Autowired OrderRepository orderRepository;
+    @Autowired CartRepository cartRepository;
+    @Autowired DatabaseCleaner databaseCleaner;
 
-    // limpa na ordem das FKs: estoque -> produtos -> categorias
+    // Limpa na ordem das FKs. Precisa apagar pedidos e carrinhos ANTES dos produtos, mesmo que
+    // esta classe nao crie nenhum: as classes de teste compartilham o banco, e a que rodou antes
+    // pode ter deixado pedido_item/carrinho_item apontando para produtos. A ordem de execucao das
+    // classes muda entre sistemas operacionais, entao isso passa local e quebra no CI.
     @BeforeEach
     void limpar() {
-        inventoryItemRepository.deleteAll();
-        productRepository.deleteAll();
-        categoryRepository.deleteAll();
+        databaseCleaner.limparTudo();
     }
 
     private String criarProdutoComEstoque(int disponivel) {

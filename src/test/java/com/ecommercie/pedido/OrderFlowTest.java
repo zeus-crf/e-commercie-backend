@@ -18,6 +18,7 @@ import com.ecommercie.security.repository.RefreshTokenRepository;
 import com.ecommercie.security.repository.UserRepository;
 import com.jayway.jsonpath.JsonPath;
 import jakarta.servlet.http.Cookie;
+import com.ecommercie.support.DatabaseCleaner;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -62,6 +63,7 @@ class OrderFlowTest {
     @Autowired UserRepository userRepository;
     @Autowired RefreshTokenRepository refreshTokenRepository;
     @Autowired PasswordEncoder passwordEncoder;
+    @Autowired DatabaseCleaner databaseCleaner;
 
     private static final String ENDERECO = """
             { "logradouro":"Rua A","numero":"10","bairro":"Centro","cidade":"Sao Paulo","uf":"SP","cep":"01000000","serviceId":1,"valorFrete":15.00 }
@@ -70,13 +72,7 @@ class OrderFlowTest {
     // limpa na ordem das FKs: pedido (cascade item+endereco) e carrinho antes de produtos/usuarios
     @BeforeEach
     void limpar() {
-        orderRepository.deleteAll();
-        cartRepository.deleteAll();
-        inventoryItemRepository.deleteAll();
-        productRepository.deleteAll();
-        categoryRepository.deleteAll();
-        refreshTokenRepository.deleteAll();
-        userRepository.deleteAll();
+        databaseCleaner.limparTudo();
     }
 
     // ----------------- helpers -----------------

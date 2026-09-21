@@ -21,6 +21,7 @@ import com.ecommercie.security.repository.UserRepository;
 import com.jayway.jsonpath.JsonPath;
 import com.mercadopago.client.payment.PaymentRefundClient;
 import jakarta.servlet.http.Cookie;
+import com.ecommercie.support.DatabaseCleaner;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -57,6 +58,7 @@ class ReturnFlowTest {
     @Autowired RefreshTokenRepository refreshTokenRepository;
     @Autowired OutboxEventRepository outboxEventRepository;
     @Autowired PasswordEncoder passwordEncoder;
+    @Autowired DatabaseCleaner databaseCleaner;
 
     @MockitoBean EmailService emailService;
     @MockitoBean PaymentRefundClient paymentRefundClient;
@@ -67,14 +69,7 @@ class ReturnFlowTest {
 
     @BeforeEach
     void limpar() {
-        outboxEventRepository.deleteAll();
-        orderRepository.deleteAll();
-        cartRepository.deleteAll();
-        inventoryItemRepository.deleteAll();
-        productRepository.deleteAll();
-        categoryRepository.deleteAll();
-        refreshTokenRepository.deleteAll();
-        userRepository.deleteAll();
+        databaseCleaner.limparTudo();
     }
 
     // ─── helpers ────────────────────────────────────────────────────────────────
