@@ -172,13 +172,13 @@
             <artifactId>spring-boot-starter-mail</artifactId>
         </dependency>
         -->
-        <!-- Fase 11 (Swagger/OpenAPI) - confirmar versao do springdoc compativel com Spring Boot 4:
+        <!-- Fase 12 (Swagger/OpenAPI) - linha 3.0.x do springdoc e compilada contra Spring Boot 4.0.x
+             (3.1.x ja mira o Boot 4.1). -->
         <dependency>
             <groupId>org.springdoc</groupId>
             <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
-            <version>CONFIRMAR</version>
+            <version>3.0.3</version>
         </dependency>
-        -->
     </dependencies>
 
     <build>
