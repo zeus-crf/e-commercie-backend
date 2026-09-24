@@ -16,7 +16,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 /**
  * Stub da API do Melhor Envio. So finge a API: nao muda status nem grava nada no banco
  * (isso e do ShippingService). Registra as chamadas e pode falhar sob demanda.
- * E um singleton do contexto de teste: chame reset() no @BeforeEach.
+ * E um singleton do contexto de teste: o DatabaseCleaner.limparTudo() chama reset().
  */
 public class StubShippingProvider implements ShippingProvider {
 

@@ -71,7 +71,6 @@ class ShippingFlowTest {
     @BeforeEach
     void limpar() {
         databaseCleaner.limparTudo();
-        shippingStub.reset();
     }
 
     // ----------------- etiqueta -----------------
@@ -100,9 +99,12 @@ class ShippingFlowTest {
             assertThat(req.serviceId()).isEqualTo(2);
             assertThat(req.destinatario().email()).isEqualTo("cli@test.com");
             assertThat(req.destinatario().cep()).isEqualTo("01000000");
+            assertThat(req.destinatario().logradouro()).isEqualTo("Rua A");
             assertThat(req.itens()).singleElement().satisfies(item -> {
                 assertThat(item.quantidade()).isEqualTo(2);
                 assertThat(item.precoUnitario()).isEqualByComparingTo("50.00");
+                assertThat(item.pesoKg()).isEqualByComparingTo("0.3");
+                assertThat(item.comprimentoCm()).isEqualByComparingTo("30");
             });
             assertThat(req.documentoFiscal()).isNull();   // fiscal desligado nos testes
         });
