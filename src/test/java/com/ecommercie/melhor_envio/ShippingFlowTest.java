@@ -8,6 +8,7 @@ import com.ecommercie.catalogo.repository.ProductRepository;
 import com.ecommercie.estoque.model.InventoryItem;
 import com.ecommercie.estoque.repository.InventoryItemRepository;
 import com.ecommercie.melhor_envio.models.Shipment;
+import com.ecommercie.melhor_envio.repository.ShipmentTrackingEventRepository;
 import com.ecommercie.melhor_envio.repository.ShippimentRepository;
 import com.ecommercie.outbox.OutboxTypes;
 import com.ecommercie.outbox.repository.OutboxEventRepository;
@@ -52,6 +53,7 @@ class ShippingFlowTest {
     @Autowired MockMvc mockMvc;
     @Autowired OrderRepository orderRepository;
     @Autowired ShippimentRepository shippimentRepository;
+    @Autowired ShipmentTrackingEventRepository shipmentTrackingEventRepository;
     @Autowired OutboxEventRepository outboxEventRepository;
     @Autowired ProductRepository productRepository;
     @Autowired CategoryRepository categoryRepository;
@@ -88,6 +90,7 @@ class ShippingFlowTest {
                 .extracting(ev -> ev.getType())
                 .filteredOn(OutboxTypes.EMAIL_PEDIDO_ENTREGUE::equals)
                 .hasSize(1);
+        assertThat(shipmentTrackingEventRepository.findAll()).hasSize(2);
     }
 
     @Test
@@ -104,6 +107,10 @@ class ShippingFlowTest {
         assertThat(outboxEventRepository.findAll())
                 .extracting(ev -> ev.getType())
                 .doesNotContain(OutboxTypes.EMAIL_PEDIDO_ENTREGUE);
+        assertThat(shipmentTrackingEventRepository.findAll()).hasSize(1);
+        Shipment shipment = shippimentRepository.findByMeOrderId("me-rastreio-2").orElseThrow();
+        assertThat(shipment.getTrackingStatus()).isEqualTo("delivered");
+        assertThat(shipment.getDeliveredAt()).isNotNull();
     }
 
     // ----------------- helpers -----------------
@@ -152,6 +159,7 @@ class ShippingFlowTest {
                 """.formatted(email);
         return mockMvc.perform(post("/api/v1/auth/register")
                         .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isOk())
                 .andReturn().getResponse().getCookie("access_token");
     }
 
@@ -164,6 +172,7 @@ class ShippingFlowTest {
         return mockMvc.perform(post("/api/v1/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{ \"email\": \"admin@test.com\", \"senha\": \"senha123\" }"))
+                .andExpect(status().isOk())
                 .andReturn().getResponse().getCookie("access_token");
     }
 

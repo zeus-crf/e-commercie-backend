@@ -44,8 +44,11 @@ public class ShipmentTrackingService {
             Order order = shipment.getOrder();
             if (order.getStatus() == StatusOrder.ENVIADO) {
                 orderService.marcarEntregue(order);
+            } else if (order.getStatus() == StatusOrder.ENTREGUE) {
+                // "delivered" repetido: o ME reenvia o webhook — nada a fazer
+                log.info("Tracking 'delivered' repetido para pedido {} (já entregue)", order.getId());
             } else {
-                // "delivered" repetido (o ME reenvia) ou pedido fora de ENVIADO: nao transiciona nem avisa
+                // pedido fora de ENVIADO (ex.: em separação ou em devolução): nao transiciona nem avisa
                 log.warn("Tracking 'delivered' ignorado para pedido {} em {}", order.getId(), order.getStatus());
             }
         }
