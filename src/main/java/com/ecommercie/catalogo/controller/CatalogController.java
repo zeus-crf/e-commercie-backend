@@ -4,6 +4,8 @@ import com.ecommercie.catalogo.dtos.CategoryResponse;
 import com.ecommercie.catalogo.dtos.ProductResponse;
 import com.ecommercie.catalogo.service.CatalogService;
 import com.ecommercie.shared.ApiResponse;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -20,25 +22,30 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/v1/catalog")
 @RequiredArgsConstructor
+@Tag(name = "Catalogo", description = "Vitrine pública de produtos e categorias")
 public class CatalogController {
 
     private final CatalogService catalogService;
 
+    @Operation(summary = "Lista os produtos ativos (paginado)")
     @GetMapping("/products")
     public ResponseEntity<ApiResponse<Page<ProductResponse>>> listProducts(Pageable pageable) {
         return ResponseEntity.ok(ApiResponse.ok(catalogService.listProducts(pageable)));
     }
 
+    @Operation(summary = "Exibe um produto pelo id")
     @GetMapping("/products/{productId}")
     public ResponseEntity<ApiResponse<ProductResponse>> getProduct(@PathVariable String productId) {
         return ResponseEntity.ok(ApiResponse.ok(catalogService.listByIdProduct(productId)));
     }
 
+    @Operation(summary = "Lista as categorias (paginado)")
     @GetMapping("/categories")
     public ResponseEntity<ApiResponse<Page<CategoryResponse>>> listCategories(Pageable pageable) {
         return ResponseEntity.ok(ApiResponse.ok(catalogService.listCategory(pageable)));
     }
 
+    @Operation(summary = "Exibe uma categoria pelo id")
     @GetMapping("/categories/{categoryId}")
     public ResponseEntity<ApiResponse<CategoryResponse>> getCategory(@PathVariable String categoryId) {
         return ResponseEntity.ok(ApiResponse.ok(catalogService.listByIdCategory(categoryId)));

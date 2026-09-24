@@ -3,6 +3,8 @@ package com.ecommercie.devolucao.controller;
 import com.ecommercie.devolucao.service.ReturnService;
 import com.ecommercie.security.models.User;
 import com.ecommercie.shared.ApiResponse;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -12,12 +14,14 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/api/v1/orders")
 @RequiredArgsConstructor
+@Tag(name = "Devoluções", description = "Solicitação de devolução pelo cliente")
 public class ReturnController {
 
     private final ReturnService returnService;
 
     public record DevolucaoRequest(String motivo) {}
 
+    @Operation(summary = "Solicita a devolução de um pedido")
     @PostMapping("/{orderId}/return")
     public ResponseEntity<ApiResponse<Void>> solicitarDevolucao(@AuthenticationPrincipal UserDetails userDetails,
                                                                 @PathVariable String orderId,

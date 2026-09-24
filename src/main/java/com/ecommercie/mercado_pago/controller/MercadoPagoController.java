@@ -5,6 +5,8 @@ import com.ecommercie.mercado_pago.dtos.RequestPreference;
 import com.ecommercie.mercado_pago.dtos.ResponsePreference;
 import com.ecommercie.mercado_pago.service.PreferenceService;
 import com.ecommercie.shared.ApiResponse;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -14,11 +16,14 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/api/v1/payments")
 @RequiredArgsConstructor
+@Tag(name = "Pagamentos", description = "Pagamento do pedido via Mercado Pago")
 @Slf4j
 public class MercadoPagoController {
 
     private final PreferenceService preferenceService;
 
+    @Operation(summary = "Cria a preferência de pagamento do pedido no Mercado Pago",
+            description = "Devolve o id da preferência e a URL de redirecionamento para o checkout")
     @PostMapping("/{orderId}/preference")
     public ResponseEntity<ApiResponse<ResponsePreference>> criarPreferencia(
             @Valid @RequestBody RequestPreference request,

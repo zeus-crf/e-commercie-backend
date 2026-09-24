@@ -4,6 +4,10 @@ server:
 spring:
   application:
     name: ecommercie
+  # Carrega o .env (formato CHAVE=valor) como properties para rodar local sem exportar variaveis.
+  # "optional:" = no Docker/CI, onde as variaveis vem do ambiente, a ausencia do arquivo nao quebra.
+  config:
+    import: optional:file:.env[.properties]
   datasource:
     url: jdbc:postgresql://localhost:5432/ecommercie
     username: postgres

@@ -5,6 +5,8 @@ import com.ecommercie.mercado_pago.service.WebhookService;
 import com.ecommercie.shared.ApiResponse;
 import com.mercadopago.exceptions.MPApiException;
 import com.mercadopago.exceptions.MPException;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
@@ -13,11 +15,14 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/api/v1/webhooks")
 @RequiredArgsConstructor
+@Tag(name = "Webhooks", description = "Callbacks chamados por provedores externos")
 @Slf4j
 public class WebhookController {
 
     private final WebhookService webhookService;
 
+    @Operation(summary = "Recebe notificações do Mercado Pago",
+            description = "Chamado pelo provedor externo. Aceita os formatos webhook (type/data.id) e IPN (topic/id). Responde 500 em falha de comunicação com o MP, para que ele reenvie")
     @PostMapping("/mercadopago")
     public ResponseEntity<ApiResponse<?>> receberNotificacao(
             @RequestBody(required = false) MercadoPagoNotification notification,
