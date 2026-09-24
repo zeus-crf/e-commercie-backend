@@ -19,7 +19,7 @@ public interface UserRepository extends JpaRepository<User, String> {
             WHERE u.papel = com.ecommercie.security.models.Papel.CLIENTE
             AND (CAST(:q AS string) IS NULL
                 OR LOWER(u.nome) LIKE LOWER(CONCAT('%', CAST(:q AS string), '%'))
-                OR LOWER(u.email) LIKE LOWER(CONCAT('%', CAST(:q AS string), '%'))
+                OR LOWER(u.email) LIKE LOWER(CONCAT('%', CAST(:q AS string), '%')))
             """)
     Page<User> buscarCliente(@Param("q") String q, Pageable pageable);
 }

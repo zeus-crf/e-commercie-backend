@@ -249,4 +249,59 @@ class OrderFlowTest {
         assertThat(inv.getReservada()).isZero();          // reserva liberada
         assertThat(inv.getDisponivel()).isEqualTo(10);    // físico nunca saiu
     }
+
+    // ----------------- busca de clientes (admin) -----------------
+
+    private void registrarCliente(String nome, String email) throws Exception {
+        String body = """
+                { "nome": "%s", "email": "%s", "senha": "senha123", "cpf_cnpj": "12345678900" }
+                """.formatted(nome, email);
+        mockMvc.perform(post("/api/v1/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void admin_buscaClientesPorNomeOuEmail_eRecebeOId() throws Exception {
+        registrarCliente("Maria Souza", "maria@test.com");
+        registrarCliente("Joao Lima", "joao@test.com");
+        Cookie admin = adminCookie("chefe@test.com");
+        String idMaria = userRepository.findByEmail("maria@test.com").orElseThrow().getId();
+
+        // por nome, sem diferenciar maiusculas
+        mockMvc.perform(get("/api/v1/admin/customers").param("q", "MARIA").cookie(admin))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.content.length()").value(1))
+                .andExpect(jsonPath("$.data.content[0].id").value(idMaria))
+                .andExpect(jsonPath("$.data.content[0].email").value("maria@test.com"));
+
+        // por e-mail
+        mockMvc.perform(get("/api/v1/admin/customers").param("q", "joao@").cookie(admin))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.content.length()").value(1))
+                .andExpect(jsonPath("$.data.content[0].nome").value("Joao Lima"));
+
+        // o id devolvido e o que o historico de pedidos aceita
+        mockMvc.perform(get("/api/v1/admin/customers/{userId}/orders", idMaria).cookie(admin))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void admin_listaClientesSemFiltro_naoIncluiAdmins() throws Exception {
+        registrarCliente("Maria Souza", "maria@test.com");
+        Cookie admin = adminCookie("chefe@test.com");
+
+        mockMvc.perform(get("/api/v1/admin/customers").cookie(admin))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.content.length()").value(1))
+                .andExpect(jsonPath("$.data.content[0].email").value("maria@test.com"));
+    }
+
+    @Test
+    void cliente_naoAcessaBuscaDeClientes() throws Exception {
+        Cookie cli = clienteCookie("curioso@test.com");
+
+        mockMvc.perform(get("/api/v1/admin/customers").cookie(cli))
+                .andExpect(status().isForbidden());
+    }
 }

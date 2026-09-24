@@ -4,7 +4,7 @@ import com.ecommercie.config.OpenApiConfig;
 import com.ecommercie.pedido.dtos.OrderResponse;
 import com.ecommercie.pedido.models.StatusOrder;
 import com.ecommercie.pedido.service.OrderService;
-import com.ecommercie.security.dto.UsuarioResponse;
+import com.ecommercie.security.dto.ClienteResponse;
 import com.ecommercie.shared.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -43,9 +43,10 @@ public class OrderAdminController {
         return ResponseEntity.ok(ApiResponse.ok(orderService.listarPorCliente(userId, status, pageable)));
     }
 
-    @Operation(summary = "Listar/buscar clientes")
+    @Operation(summary = "Listar/buscar clientes",
+            description = "Busca por nome ou e-mail via ?q=. Paginado. Use o id retornado em /admin/customers/{userId}/orders")
     @GetMapping("/customers")
-    public ResponseEntity<ApiResponse<Page<UsuarioResponse>>> listarClientes(@RequestParam(required = false) String q, Pageable pageable){
+    public ResponseEntity<ApiResponse<Page<ClienteResponse>>> listarClientes(@RequestParam(required = false) String q, Pageable pageable){
         return ResponseEntity.ok(ApiResponse.ok(orderService.buscarCliente(q, pageable)));
     }
 

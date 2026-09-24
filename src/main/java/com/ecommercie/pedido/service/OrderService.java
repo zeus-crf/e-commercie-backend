@@ -10,7 +10,7 @@ import com.ecommercie.pedido.models.Order;
 import com.ecommercie.pedido.models.OrderItem;
 import com.ecommercie.pedido.models.StatusOrder;
 import com.ecommercie.pedido.repository.OrderRepository;
-import com.ecommercie.security.dto.UsuarioResponse;
+import com.ecommercie.security.dto.ClienteResponse;
 import com.ecommercie.security.models.User;
 import com.ecommercie.security.repository.UserRepository;
 import jakarta.persistence.EntityNotFoundException;
@@ -96,10 +96,10 @@ public class OrderService {
     }
 
     @Transactional(readOnly = true)
-    public Page<UsuarioResponse> buscarCliente(String q, Pageable pageable) {
+    public Page<ClienteResponse> buscarCliente(String q, Pageable pageable) {
         String termo = (q == null || q.isBlank() ? null : q.trim());
         return userRepository.buscarCliente(termo, pageable)
-                .map(UsuarioResponse::from);
+                .map(ClienteResponse::from);
     }
 
 
