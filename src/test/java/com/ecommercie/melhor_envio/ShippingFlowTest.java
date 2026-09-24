@@ -126,6 +126,71 @@ class ShippingFlowTest {
         assertThat(shippingStub.compras()).isEmpty();
     }
 
+    @Test
+    void gerarEtiqueta_chamaOMelhorEnvioForaDeTransacao() throws Exception {
+        String orderId = pedidoPago();
+
+        mockMvc.perform(post("/api/v1/admin/orders/{id}/label", orderId).cookie(adminCookie()))
+                .andExpect(status().isOk());
+
+        // carrinho + compra: nenhuma das duas chamadas HTTP pode segurar transacao do banco
+        assertThat(shippingStub.transacaoAtivaNasChamadas()).containsExactly(false, false);
+    }
+
+    @Test
+    void falhaNaCompra_deixaEnvioPendente_eRetryReaproveitaOCarrinho() throws Exception {
+        String orderId = pedidoPago();
+        Cookie admin = adminCookie();
+        shippingStub.falharNaCompra(true);
+
+        mockMvc.perform(post("/api/v1/admin/orders/{id}/label", orderId).cookie(admin))
+                .andExpect(status().isUnprocessableEntity());
+
+        // o carrinho foi criado e ficou registrado; o pedido esta separado, mas nao enviado
+        assertThat(orderRepository.findById(orderId).orElseThrow().getStatus()).isEqualTo(StatusOrder.EM_SEPARACAO);
+        assertThat(shippimentRepository.findAll()).singleElement().satisfies(envio -> {
+            assertThat(envio.getMeOrderId()).isEqualTo(StubShippingProvider.ME_ORDER_PREFIX + orderId);
+            assertThat(envio.getLabelGeneratedAt()).isNull();   // pendente
+        });
+        assertThat(outboxEventRepository.findAll()).extracting(ev -> ev.getType())
+                .doesNotContain(OutboxTypes.EMAIL_PEDIDO_ENVIADO);
+
+        // retry: nao cria outro carrinho, so tenta pagar o mesmo
+        shippingStub.falharNaCompra(false);
+        mockMvc.perform(post("/api/v1/admin/orders/{id}/label", orderId).cookie(admin))
+                .andExpect(status().isOk());
+
+        assertThat(shippingStub.carrinhos()).hasSize(1);
+        assertThat(shippingStub.compras()).containsExactly(StubShippingProvider.ME_ORDER_PREFIX + orderId);
+        assertThat(orderRepository.findById(orderId).orElseThrow().getStatus()).isEqualTo(StatusOrder.ENVIADO);
+        assertThat(shippimentRepository.findAll()).singleElement()
+                .satisfies(envio -> assertThat(envio.getLabelGeneratedAt()).isNotNull());
+        assertThat(outboxEventRepository.findAll()).extracting(ev -> ev.getType())
+                .filteredOn(OutboxTypes.EMAIL_PEDIDO_ENVIADO::equals)
+                .hasSize(1);
+    }
+
+    @Test
+    void falhaNoCarrinho_naoGravaEnvio_eRetryFunciona() throws Exception {
+        String orderId = pedidoPago();
+        Cookie admin = adminCookie();
+        shippingStub.falharNoCarrinho(true);
+
+        mockMvc.perform(post("/api/v1/admin/orders/{id}/label", orderId).cookie(admin))
+                .andExpect(status().isUnprocessableEntity());
+
+        assertThat(orderRepository.findById(orderId).orElseThrow().getStatus()).isEqualTo(StatusOrder.EM_SEPARACAO);
+        assertThat(shippimentRepository.findAll()).isEmpty();
+        assertThat(shippingStub.compras()).isEmpty();
+
+        shippingStub.falharNoCarrinho(false);
+        mockMvc.perform(post("/api/v1/admin/orders/{id}/label", orderId).cookie(admin))
+                .andExpect(status().isOk());
+
+        assertThat(orderRepository.findById(orderId).orElseThrow().getStatus()).isEqualTo(StatusOrder.ENVIADO);
+        assertThat(shippimentRepository.findAll()).hasSize(1);
+    }
+
     // ----------------- rastreio -----------------
 
     @Test
