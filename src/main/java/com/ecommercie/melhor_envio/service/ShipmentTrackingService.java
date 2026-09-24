@@ -5,6 +5,9 @@ import com.ecommercie.melhor_envio.models.Shipment;
 import com.ecommercie.melhor_envio.models.ShipmentTrackingEvent;
 import com.ecommercie.melhor_envio.repository.ShipmentTrackingEventRepository;
 import com.ecommercie.melhor_envio.repository.ShippimentRepository;
+import com.ecommercie.outbox.OutboxTypes;
+import com.ecommercie.outbox.dispatcher.OutboxDispatcher;
+import com.ecommercie.outbox.service.OutboxService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -19,6 +22,7 @@ public class ShipmentTrackingService {
 
     private final ShippimentRepository shipmentRepository;
     private final ShipmentTrackingEventRepository trackingEventRepository;
+    private final OutboxService outboxService;
 
     @Transactional
     public void processar(MeTrackingEvent event) {
@@ -39,6 +43,9 @@ public class ShipmentTrackingService {
             shipment.setDeliveredAt(LocalDateTime.now());
             try {
                 shipment.getOrder().markEntregue();
+                // so chega aqui se a transicao valeu: "delivered" repetido cai no catch e nao duplica o e-mail
+                outboxService.registrar(OutboxTypes.EMAIL_PEDIDO_ENTREGUE,
+                        new OutboxDispatcher.EmailPayload(shipment.getOrder().getId(), shipment.getOrder().getUser().getEmail()));
             } catch (IllegalArgumentException ex) {
                 log.warn("Não foi possível marcar pedido {} como entregue: {}", shipment.getOrder().getId(), ex.getMessage());
             }

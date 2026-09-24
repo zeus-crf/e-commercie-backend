@@ -8,6 +8,9 @@ import com.ecommercie.catalogo.repository.CategoryRepository;
 import com.ecommercie.catalogo.repository.ProductRepository;
 import com.ecommercie.estoque.model.InventoryItem;
 import com.ecommercie.estoque.repository.InventoryItemRepository;
+import com.ecommercie.outbox.OutboxTypes;
+import com.ecommercie.outbox.models.OutboxEvent;
+import com.ecommercie.outbox.repository.OutboxEventRepository;
 import com.ecommercie.pedido.models.Order;
 import com.ecommercie.pedido.models.StatusOrder;
 import com.ecommercie.pedido.repository.OrderRepository;
@@ -64,6 +67,7 @@ class OrderFlowTest {
     @Autowired RefreshTokenRepository refreshTokenRepository;
     @Autowired PasswordEncoder passwordEncoder;
     @Autowired DatabaseCleaner databaseCleaner;
+    @Autowired OutboxEventRepository outboxEventRepository;
 
     private static final String ENDERECO = """
             { "logradouro":"Rua A","numero":"10","bairro":"Centro","cidade":"Sao Paulo","uf":"SP","cep":"01000000","serviceId":1,"valorFrete":15.00 }
@@ -248,6 +252,53 @@ class OrderFlowTest {
         var inv = inventoryItemRepository.findByProductId(p.getId()).orElseThrow();
         assertThat(inv.getReservada()).isZero();          // reserva liberada
         assertThat(inv.getDisponivel()).isEqualTo(10);    // físico nunca saiu
+
+        // cliente avisado da expiração
+        assertThat(outboxEventRepository.findAll()).singleElement().satisfies(ev -> {
+            assertThat(ev.getType()).isEqualTo(OutboxTypes.EMAIL_PEDIDO_CANCELADO);
+            assertThat(ev.getPayload()).contains(orderId).contains("a@test.com");
+        });
+    }
+
+    // ----------------- e-mails das transições (outbox) -----------------
+
+    @Test
+    void clienteCancela_registraEmailDeCancelamento() throws Exception {
+        Cookie cli = clienteCookie("a@test.com");
+        Product p = produtoComEstoque("Camiseta", "50.00", 10);
+        addAoCarrinho(cli, p.getId(), 1);
+        String orderId = checkout(cli);
+
+        mockMvc.perform(patch("/api/v1/orders/" + orderId + "/cancelar").cookie(cli))
+                .andExpect(status().isOk());
+
+        assertThat(outboxEventRepository.findAll()).singleElement().satisfies(ev -> {
+            assertThat(ev.getType()).isEqualTo(OutboxTypes.EMAIL_PEDIDO_CANCELADO);
+            assertThat(ev.getPayload()).contains(orderId).contains("a@test.com");
+        });
+    }
+
+    @Test
+    void adminEnviaEEntrega_registraUmEmailPorTransicao() throws Exception {
+        Cookie cli = clienteCookie("a@test.com");
+        Cookie admin = adminCookie("admin@test.com");
+        Product p = produtoComEstoque("Camiseta", "50.00", 10);
+        addAoCarrinho(cli, p.getId(), 1);
+        String orderId = checkout(cli);
+
+        // pagamento chega pelo webhook do MP; aqui o pedido vai direto para PAGO
+        Order order = orderRepository.findById(orderId).orElseThrow();
+        order.markPaid();
+        orderRepository.save(order);
+
+        mockMvc.perform(patch("/api/v1/admin/orders/" + orderId + "/separar").cookie(admin)).andExpect(status().isOk());
+        mockMvc.perform(patch("/api/v1/admin/orders/" + orderId + "/enviar").cookie(admin)).andExpect(status().isOk());
+        mockMvc.perform(patch("/api/v1/admin/orders/" + orderId + "/entregar").cookie(admin)).andExpect(status().isOk());
+
+        // separar nao avisa o cliente; enviar e entregar sim
+        assertThat(outboxEventRepository.findAll())
+                .extracting(OutboxEvent::getType)
+                .containsExactlyInAnyOrder(OutboxTypes.EMAIL_PEDIDO_ENVIADO, OutboxTypes.EMAIL_PEDIDO_ENTREGUE);
     }
 
     // ----------------- busca de clientes (admin) -----------------

@@ -3,6 +3,9 @@ package com.ecommercie.pedido.service;
 import com.ecommercie.carrinho.model.CartItem;
 import com.ecommercie.carrinho.repository.CartRepository;
 import com.ecommercie.estoque.service.InventoryService;
+import com.ecommercie.outbox.OutboxTypes;
+import com.ecommercie.outbox.dispatcher.OutboxDispatcher;
+import com.ecommercie.outbox.service.OutboxService;
 import com.ecommercie.pedido.dtos.CheckoutRequest;
 import com.ecommercie.pedido.dtos.OrderResponse;
 import com.ecommercie.pedido.models.Address;
@@ -33,6 +36,7 @@ public class OrderService {
     private final InventoryService inventoryService;
     private final CartRepository cartRepository;
     private final UserRepository userRepository;
+    private final OutboxService outboxService;
 
     @Transactional
     public OrderResponse checkout(User user, CheckoutRequest request) {
@@ -143,6 +147,7 @@ public class OrderService {
                 .orElseThrow(() -> new EntityNotFoundException("Pedido não encontrado"));
 
         order.markEnviando();
+        notificarCliente(order, OutboxTypes.EMAIL_PEDIDO_ENVIADO);
         return OrderResponse.from(order);
     }
 
@@ -152,6 +157,7 @@ public class OrderService {
                 .orElseThrow(() -> new EntityNotFoundException("Pedido não encontrado"));
 
         order.markEntregue();
+        notificarCliente(order, OutboxTypes.EMAIL_PEDIDO_ENTREGUE);
         return OrderResponse.from(order);
     }
 
@@ -173,7 +179,7 @@ public class OrderService {
     }
 
     // cancela o pedido e devolve a reserva de estoque de cada item.
-    // reusado pelo cancelar (cliente) e pela expiração (job).
+    // reusado pelo cancelar (cliente) e pela expiração (job) — os dois avisam o cliente.
     private void cancelarEDevolver(Order order) {
         order.markCancelado();
         for (OrderItem item : order.getItens()) {
@@ -181,5 +187,11 @@ public class OrderService {
                 inventoryService.devolverReserva(item.getProduct().getId(), item.getQuantidade());
             }
         }
+        notificarCliente(order, OutboxTypes.EMAIL_PEDIDO_CANCELADO);
+    }
+
+    // grava o e-mail no outbox na mesma transação da mudança de status; o relay envia depois
+    private void notificarCliente(Order order, String tipo) {
+        outboxService.registrar(tipo, new OutboxDispatcher.EmailPayload(order.getId(), order.getUser().getEmail()));
     }
 }

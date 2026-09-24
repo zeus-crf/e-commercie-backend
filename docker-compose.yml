@@ -4,17 +4,19 @@ services:
     container_name: ecommercie-postgres
     restart: unless-stopped
     environment:
-      POSTGRES_DB: ${DB_NAME}
-      POSTGRES_USER: ${DB_USER}
+      POSTGRES_DB: ${DB_NAME:-ecommercie}
+      POSTGRES_USER: ${DB_USER:-postgres}
       # sem senha (consistente com o .env). Em producao real, troque por senha.
       POSTGRES_HOST_AUTH_METHOD: trust
     ports:
       # host 5433 para nao conflitar com um Postgres local ja rodando na 5432
       - "5433:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      # postgres 18+: monta /var/lib/postgresql (os dados ficam em 18/docker dentro dele).
+      # Montar em /var/lib/postgresql/data, como nas versoes antigas, faz o container nao subir.
+      - postgres_data:/var/lib/postgresql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-ecommercie}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -31,11 +33,11 @@ services:
       SPRING_PROFILES_ACTIVE: docker
       DB_HOST: postgres          # nome do servico do banco na rede do compose
       DB_PORT: 5432              # porta INTERNA do container postgres
-      DB_NAME: ${DB_NAME}
-      DB_USER: ${DB_USER}
+      DB_NAME: ${DB_NAME:-ecommercie}
+      DB_USER: ${DB_USER:-postgres}
       DB_PASSWORD: ${DB_PASSWORD}
       JWT_SECRET: ${JWT_SECRET}
-      CORS_ORIGIN: ${CORS_ORIGIN}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:4200}
       # Credenciais dos provedores externos: sem elas a aplicacao nao sobe (proposital).
       MP_ACCESS_TOKEN: ${MP_ACCESS_TOKEN}
       MP_NOTIFICATION_URL: ${MP_NOTIFICATION_URL}
@@ -49,6 +51,14 @@ services:
       FOCUSNFE_TOKEN: ${FOCUSNFE_TOKEN:-}
       FOCUSNFE_BASE_URL: ${FOCUSNFE_BASE_URL:-https://homologacao.focusnfe.com.br}
       FOCUSNFE_CNPJ: ${FOCUSNFE_CNPJ:-}
+      # E-mail (dev): Mailpit rodando na maquina host (docker start mailpit).
+      # Dentro do container, "localhost" e o proprio container - por isso host.docker.internal.
+      # Em producao, trocar pelo SMTP real (MAIL_HOST/MAIL_PORT/MAIL_USER/MAIL_PASS/MAIL_AUTH/MAIL_STARTTLS).
+      MAIL_HOST: host.docker.internal
+      MAIL_PORT: 1025
+    # host.docker.internal ja existe no Docker Desktop; esta linha faz o mesmo no Linux
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       postgres:
         condition: service_healthy

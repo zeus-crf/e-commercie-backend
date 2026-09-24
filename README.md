@@ -260,6 +260,13 @@ O módulo fiscal nasce **desligado** (`FISCAL_ENABLED=false`) e a loja funciona 
 - **Assinatura do webhook do Mercado Pago:** a validação do cabeçalho `x-signature` ainda não está
   implementada. A idempotência está (tabela `webhook_event`), e o pagamento é sempre reconsultado na
   API do MP antes de marcar o pedido como pago.
+- **Transições de pedido espalhadas:** o `MelhorEnvioClient.buyLabel` (um adapter HTTP) muda o status
+  do pedido para `EM_SEPARACAO`/`ENVIADO`, e o webhook de rastreio (`ShipmentTrackingService`) marca
+  `ENTREGUE` direto na entidade. Por isso o e-mail de "enviado" é registrado em dois lugares
+  (`OrderService.enviar` e `ShippingService.gerarEtiqueta`) e o de "entregue" também
+  (`OrderService.entregar` e `ShipmentTrackingService`). O ideal é concentrar cada transição num
+  único método do `OrderService`, que já registra o e-mail, chamado pelos dois caminhos — e o
+  client só falar com a API do Melhor Envio.
 
 ---
 

@@ -161,6 +161,34 @@ public class EndToEndPurchaseFlowTest {
             assertThat(envio.getTrackingCode()).isEqualTo(StubShippingProvider.TRACKING_CODE);
             assertThat(envio.getServiceId()).isEqualTo(2);
         });
+
+        // gerar a etiqueta avisa o cliente do envio
+        assertThat(outboxEventRepository.findAll())
+                .extracting(ev -> ev.getType())
+                .contains(OutboxTypes.EMAIL_PEDIDO_ENVIADO);
+
+        // 8. ENTREGA — o webhook de rastreio do ME avisa "delivered", e o ME pode reenviar
+        dispararTrackingEntregue(orderId);
+        dispararTrackingEntregue(orderId);
+
+        Order entregue = orderRepository.findById(orderId).orElseThrow();
+        assertThat(entregue.getStatus()).isEqualTo(StatusOrder.ENTREGUE);
+
+        // um unico e-mail de entrega, mesmo com o webhook duplicado
+        assertThat(outboxEventRepository.findAll())
+                .extracting(ev -> ev.getType())
+                .filteredOn(OutboxTypes.EMAIL_PEDIDO_ENTREGUE::equals)
+                .hasSize(1);
+    }
+
+    private void dispararTrackingEntregue(String orderId) throws Exception {
+        mockMvc.perform(post("/api/v1/webhooks/melhorenvio")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"shipment_id":"stub-me-order-%s","status":"delivered","tracking":"%s"}
+                                """.formatted(orderId, StubShippingProvider.TRACKING_CODE)))
+                .andExpect(status().isOk())
+                .andExpect(content().string(""));
     }
 
     // ----------------- helpers -----------------
