@@ -137,7 +137,7 @@ public class OrderService {
         var order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new EntityNotFoundException("Esse pedido não existe"));
 
-        order.markSeparando();
+        marcarSeparando(order);
         return OrderResponse.from(order);
     }
 
@@ -146,8 +146,7 @@ public class OrderService {
         var order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new EntityNotFoundException("Pedido não encontrado"));
 
-        order.markEnviando();
-        notificarCliente(order, OutboxTypes.EMAIL_PEDIDO_ENVIADO);
+        marcarEnviado(order);
         return OrderResponse.from(order);
     }
 
@@ -156,8 +155,7 @@ public class OrderService {
         var order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new EntityNotFoundException("Pedido não encontrado"));
 
-        order.markEntregue();
-        notificarCliente(order, OutboxTypes.EMAIL_PEDIDO_ENTREGUE);
+        marcarEntregue(order);
         return OrderResponse.from(order);
     }
 
@@ -176,6 +174,26 @@ public class OrderService {
         var vencidos = orderRepository.findByStatusAndExpiresAtBefore(
                 StatusOrder.AGUARDANDO_PAGAMENTO, LocalDateTime.now());
         vencidos.forEach(this::cancelarEDevolver);
+    }
+
+    // ---------- transições compartilhadas ----------
+    // Único lugar que muda o status para EM_SEPARACAO / ENVIADO / ENTREGUE. Chamados pelos
+    // endpoints de admin e pelo módulo de frete (etiqueta e rastreio), sempre DENTRO da
+    // transação de quem chama. Sem @Transactional de propósito: se a guarda do Order lançasse
+    // através do proxy, a transação inteira do chamador seria marcada como rollback-only.
+
+    public void marcarSeparando(Order order) {
+        order.markSeparando();
+    }
+
+    public void marcarEnviado(Order order) {
+        order.markEnviando();
+        notificarCliente(order, OutboxTypes.EMAIL_PEDIDO_ENVIADO);
+    }
+
+    public void marcarEntregue(Order order) {
+        order.markEntregue();
+        notificarCliente(order, OutboxTypes.EMAIL_PEDIDO_ENTREGUE);
     }
 
     // cancela o pedido e devolve a reserva de estoque de cada item.
