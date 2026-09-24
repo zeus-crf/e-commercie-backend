@@ -5,9 +5,9 @@ import com.ecommercie.melhor_envio.models.Shipment;
 import com.ecommercie.melhor_envio.models.ShipmentTrackingEvent;
 import com.ecommercie.melhor_envio.repository.ShipmentTrackingEventRepository;
 import com.ecommercie.melhor_envio.repository.ShippimentRepository;
-import com.ecommercie.outbox.OutboxTypes;
-import com.ecommercie.outbox.dispatcher.OutboxDispatcher;
-import com.ecommercie.outbox.service.OutboxService;
+import com.ecommercie.pedido.models.Order;
+import com.ecommercie.pedido.models.StatusOrder;
+import com.ecommercie.pedido.service.OrderService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -22,7 +22,7 @@ public class ShipmentTrackingService {
 
     private final ShippimentRepository shipmentRepository;
     private final ShipmentTrackingEventRepository trackingEventRepository;
-    private final OutboxService outboxService;
+    private final OrderService orderService;
 
     @Transactional
     public void processar(MeTrackingEvent event) {
@@ -41,13 +41,12 @@ public class ShipmentTrackingService {
             shipment.setPostedAt(LocalDateTime.now());
         } else if ("delivered".equals(event.status())) {
             shipment.setDeliveredAt(LocalDateTime.now());
-            try {
-                shipment.getOrder().markEntregue();
-                // so chega aqui se a transicao valeu: "delivered" repetido cai no catch e nao duplica o e-mail
-                outboxService.registrar(OutboxTypes.EMAIL_PEDIDO_ENTREGUE,
-                        new OutboxDispatcher.EmailPayload(shipment.getOrder().getId(), shipment.getOrder().getUser().getEmail()));
-            } catch (IllegalArgumentException ex) {
-                log.warn("Não foi possível marcar pedido {} como entregue: {}", shipment.getOrder().getId(), ex.getMessage());
+            Order order = shipment.getOrder();
+            if (order.getStatus() == StatusOrder.ENVIADO) {
+                orderService.marcarEntregue(order);
+            } else {
+                // "delivered" repetido (o ME reenvia) ou pedido fora de ENVIADO: nao transiciona nem avisa
+                log.warn("Tracking 'delivered' ignorado para pedido {} em {}", order.getId(), order.getStatus());
             }
         }
 
