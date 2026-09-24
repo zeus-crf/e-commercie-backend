@@ -1,6 +1,7 @@
 package com.ecommercie.security.repository;
 
 import com.ecommercie.security.models.User;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -20,5 +21,5 @@ public interface UserRepository extends JpaRepository<User, String> {
                 OR LOWER(u.nome) LIKE LOWER(CONCAT('%', CAST(:q AS string), '%'))
                 OR LOWER(u.email) LIKE LOWER(CONCAT('%', CAST(:q AS string), '%'))
             """)
-    Optional<User> buscarCliente(@Param("q") String q, Pageable pageable);
+    Page<User> buscarCliente(@Param("q") String q, Pageable pageable);
 }
