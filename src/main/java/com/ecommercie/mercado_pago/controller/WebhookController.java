@@ -24,7 +24,7 @@ public class WebhookController {
     @Operation(summary = "Recebe notificações do Mercado Pago",
             description = "Chamado pelo provedor externo. Aceita os formatos webhook (type/data.id) e IPN (topic/id). Responde 500 em falha de comunicação com o MP, para que ele reenvie")
     @PostMapping("/mercadopago")
-    public ResponseEntity<ApiResponse<?>> receberNotificacao(
+    public ResponseEntity<ApiResponse<Void>> receberNotificacao(
             @RequestBody(required = false) MercadoPagoNotification notification,
             @RequestParam(required = false) String id,
             @RequestParam(required = false) String topic) {
@@ -64,6 +64,6 @@ public class WebhookController {
         } catch (Exception ex) {
             log.error("Erro ao processar webhook MP id={}: {}", paymentId, ex.getMessage());
         }
-        return ResponseEntity.ok(ApiResponse.ok("ok", null));
+        return ResponseEntity.ok().build();
     }
 }
