@@ -5,8 +5,10 @@ import com.ecommercie.catalogo.dtos.CategoryResponse;
 import com.ecommercie.catalogo.dtos.ProductRequest;
 import com.ecommercie.catalogo.dtos.ProductResponse;
 import com.ecommercie.catalogo.service.CatalogService;
+import com.ecommercie.config.OpenApiConfig;
 import com.ecommercie.shared.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -32,6 +34,7 @@ import org.springframework.web.multipart.MultipartFile;
 @RequestMapping("/api/v1/admin/catalog")
 @RequiredArgsConstructor
 @Tag(name = "Catalogo do Administrador", description = "Onde o Administrador para realizar operações de controle do catalogo")
+@SecurityRequirement(name = OpenApiConfig.COOKIE_AUTH)
 public class AdminCatalogController {
 
     private final CatalogService catalogService;

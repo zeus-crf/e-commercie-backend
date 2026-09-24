@@ -1,9 +1,11 @@
 package com.ecommercie.estoque.controller;
 
+import com.ecommercie.config.OpenApiConfig;
 import com.ecommercie.estoque.dto.InventoryItemRequest;
 import com.ecommercie.estoque.service.InventoryService;
 import com.ecommercie.shared.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -14,6 +16,7 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/api/v1/admin/inventory")
 @RequiredArgsConstructor
 @Tag(name = "Estoque do Administrador", description = "Onde o Administrador ajusta o estoque dos produtos")
+@SecurityRequirement(name = OpenApiConfig.COOKIE_AUTH)
 public class AdminInventoryController {
 
     private final InventoryService inventoryService;

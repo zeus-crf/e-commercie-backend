@@ -1,9 +1,11 @@
 package com.ecommercie.fiscal.controller;
 
+import com.ecommercie.config.OpenApiConfig;
 import com.ecommercie.fiscal.dto.InvoiceResponse;
 import com.ecommercie.fiscal.service.FiscalService;
 import com.ecommercie.shared.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
@@ -17,6 +19,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/admin/orders/{orderId}/invoice")
 @RequiredArgsConstructor
 @Tag(name = "Fiscal do Administrador", description = "Onde o Administrador consulta os documentos fiscais dos pedidos")
+@SecurityRequirement(name = OpenApiConfig.COOKIE_AUTH)
 public class InvoiceAdminController {
 
     private final FiscalService fiscalService;

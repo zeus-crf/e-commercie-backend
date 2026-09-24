@@ -91,3 +91,14 @@ focusnfe:
     tipo-emitente: ${FOCUSNFE_TIPO_EMITENTE:2}       # DC-e: "1" a "4"
     modalidade-transporte: ${FOCUSNFE_MODALIDADE_TRANSPORTE:0}  # DC-e: "0", "1" ou "2"
 
+# OpenAPI / Swagger UI (Fase 12)
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    operations-sorter: method
+    tags-sorter: alpha
+    display-request-duration: true
+  packages-to-scan: com.ecommercie
+  default-produces-media-type: application/json

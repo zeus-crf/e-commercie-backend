@@ -1,11 +1,13 @@
 package com.ecommercie.pedido.controller;
 
+import com.ecommercie.config.OpenApiConfig;
 import com.ecommercie.pedido.dtos.CheckoutRequest;
 import com.ecommercie.pedido.dtos.OrderResponse;
 import com.ecommercie.pedido.service.OrderService;
 import com.ecommercie.security.models.User;
 import com.ecommercie.shared.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -24,6 +26,7 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/api/v1/orders")
 @RequiredArgsConstructor
 @Tag(name = "Pedidos", description = "Pedidos do cliente autenticado")
+@SecurityRequirement(name = OpenApiConfig.COOKIE_AUTH)
 public class OrderController {
 
     private final OrderService orderService;

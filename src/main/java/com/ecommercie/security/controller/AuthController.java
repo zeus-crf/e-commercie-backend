@@ -1,11 +1,13 @@
 package com.ecommercie.security.controller;
 
+import com.ecommercie.config.OpenApiConfig;
 import com.ecommercie.security.dto.AuthRequest;
 import com.ecommercie.security.dto.RegisterRequestUser;
 import com.ecommercie.security.dto.UsuarioResponse;
 import com.ecommercie.security.service.AuthService;
 import com.ecommercie.shared.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
@@ -56,6 +58,7 @@ public class AuthController {
     }
 
     @Operation(summary = "Exibe os dados do usuário logado")
+    @SecurityRequirement(name = OpenApiConfig.COOKIE_AUTH)
     @GetMapping("/me")
     public ResponseEntity<ApiResponse<UsuarioResponse>> me(@AuthenticationPrincipal UserDetails userDetails) {
         return ResponseEntity.ok(ApiResponse.ok(authService.me(userDetails)));

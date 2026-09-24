@@ -22,8 +22,10 @@ import org.springframework.test.web.servlet.MvcResult;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.options;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.cookie;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -149,7 +151,9 @@ class AuthFlowTest {
     @Test
     void adminEndpoint_semAuth_retorna401() throws Exception {
         mockMvc.perform(get("/api/v1/admin/qualquer"))
-                .andExpect(status().isUnauthorized());
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.success").value(false))          // envelope, nao a pagina de erro do container
+                .andExpect(jsonPath("$.message").value("Não autenticado"));
     }
 
     @Test
@@ -157,7 +161,40 @@ class AuthFlowTest {
         Cookie access = register("cli@test.com", "senha123").getResponse().getCookie("access_token");
 
         mockMvc.perform(get("/api/v1/admin/qualquer").cookie(access))
-                .andExpect(status().isForbidden());   // CLIENTE barrado no /admin
+                .andExpect(status().isForbidden())   // CLIENTE barrado no /admin
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.message").value("Acesso negado"));
+    }
+
+    // ----------------- CORS -----------------
+    // application-test.yml libera duas origens (lista separada por virgula)
+
+    @Test
+    void cors_segundaOrigemDaLista_eAceita() throws Exception {
+        mockMvc.perform(options("/api/v1/catalog/products")
+                        .header("Origin", "http://localhost:3000")
+                        .header("Access-Control-Request-Method", "GET"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Access-Control-Allow-Origin", "http://localhost:3000"))
+                .andExpect(header().string("Access-Control-Allow-Credentials", "true"));
+    }
+
+    @Test
+    void cors_cobreAsImagensEmFiles() throws Exception {
+        mockMvc.perform(options("/files/qualquer.png")
+                        .header("Origin", "http://localhost:4200")
+                        .header("Access-Control-Request-Method", "GET"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Access-Control-Allow-Origin", "http://localhost:4200"));
+    }
+
+    @Test
+    void cors_origemForaDaLista_eRecusada() throws Exception {
+        mockMvc.perform(options("/api/v1/catalog/products")
+                        .header("Origin", "https://site-malicioso.com")
+                        .header("Access-Control-Request-Method", "GET"))
+                .andExpect(status().isForbidden())
+                .andExpect(header().doesNotExist("Access-Control-Allow-Origin"));
     }
 
     @Test

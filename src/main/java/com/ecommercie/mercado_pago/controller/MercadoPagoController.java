@@ -1,11 +1,13 @@
 package com.ecommercie.mercado_pago.controller;
 
+import com.ecommercie.config.OpenApiConfig;
 import com.ecommercie.mercado_pago.dtos.PaymentPreference;
 import com.ecommercie.mercado_pago.dtos.RequestPreference;
 import com.ecommercie.mercado_pago.dtos.ResponsePreference;
 import com.ecommercie.mercado_pago.service.PreferenceService;
 import com.ecommercie.shared.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -18,6 +20,7 @@ import org.springframework.web.bind.annotation.*;
 @RequiredArgsConstructor
 @Tag(name = "Pagamentos", description = "Pagamento do pedido via Mercado Pago")
 @Slf4j
+@SecurityRequirement(name = OpenApiConfig.COOKIE_AUTH)
 public class MercadoPagoController {
 
     private final PreferenceService preferenceService;

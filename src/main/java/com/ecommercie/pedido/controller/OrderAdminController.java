@@ -1,10 +1,12 @@
 package com.ecommercie.pedido.controller;
 
+import com.ecommercie.config.OpenApiConfig;
 import com.ecommercie.pedido.dtos.OrderResponse;
 import com.ecommercie.pedido.models.StatusOrder;
 import com.ecommercie.pedido.service.OrderService;
 import com.ecommercie.shared.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -20,6 +22,7 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/api/v1/admin")
 @RequiredArgsConstructor
 @Tag(name = "Pedidos do Administrador", description = "Onde o Administrador gerencia os pedidos e suas transições de status")
+@SecurityRequirement(name = OpenApiConfig.COOKIE_AUTH)
 public class OrderAdminController {
 
     private final OrderService orderService;

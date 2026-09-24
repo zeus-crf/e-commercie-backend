@@ -3,9 +3,11 @@ package com.ecommercie.carrinho.controller;
 import com.ecommercie.carrinho.dto.CartItemRequest;
 import com.ecommercie.carrinho.dto.CartResponse;
 import com.ecommercie.carrinho.service.CartService;
+import com.ecommercie.config.OpenApiConfig;
 import com.ecommercie.security.models.User;
 import com.ecommercie.shared.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -18,6 +20,7 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/api/v1/cart")
 @RequiredArgsConstructor
 @Tag(name = "Carrinho", description = "Operações do carrinho do cliente")
+@SecurityRequirement(name = OpenApiConfig.COOKIE_AUTH)
 public class CartController {
 
     private final CartService cartService;

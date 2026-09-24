@@ -1,9 +1,11 @@
 package com.ecommercie.devolucao.controller;
 
+import com.ecommercie.config.OpenApiConfig;
 import com.ecommercie.devolucao.service.ReturnService;
 import com.ecommercie.security.models.User;
 import com.ecommercie.shared.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -15,6 +17,7 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/api/v1/orders")
 @RequiredArgsConstructor
 @Tag(name = "Devoluções", description = "Solicitação de devolução pelo cliente")
+@SecurityRequirement(name = OpenApiConfig.COOKIE_AUTH)
 public class ReturnController {
 
     private final ReturnService returnService;

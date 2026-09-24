@@ -22,7 +22,8 @@ security:
 
 app:
   cors:
-    allowed-origin: http://localhost:4200
+    # duas origens: o AuthFlowTest confere que a lista separada por virgula funciona
+    allowed-origin: http://localhost:4200, http://localhost:3000
 
 # credenciais FALSAS: nenhum teste chama o Mercado Pago de verdade
 mercado-pago-access_token: TEST-token-falso-de-teste
