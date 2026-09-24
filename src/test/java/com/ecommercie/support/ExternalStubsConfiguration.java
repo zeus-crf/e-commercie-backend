@@ -1,7 +1,5 @@
 package com.ecommercie.support;
 
-import com.ecommercie.melhor_envio.ShippingProvider;
-import com.ecommercie.melhor_envio.repository.ShippimentRepository;
 import com.ecommercie.mercado_pago.PaymentGateway;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
@@ -25,7 +23,7 @@ public class ExternalStubsConfiguration {
 
     @Bean
     @Primary
-    ShippingProvider stubShippingProvider(ShippimentRepository shippimentRepository) {
-        return new StubShippingProvider(shippimentRepository);
+    StubShippingProvider stubShippingProvider() {
+        return new StubShippingProvider();
     }
 }

@@ -158,8 +158,9 @@ public class EndToEndPurchaseFlowTest {
         assertThat(enviado.getStatus()).isEqualTo(StatusOrder.ENVIADO);
 
         assertThat(shippimentRepository.findAll()).singleElement().satisfies(envio -> {
-            assertThat(envio.getTrackingCode()).isEqualTo(StubShippingProvider.TRACKING_CODE);
+            assertThat(envio.getMeOrderId()).isEqualTo(StubShippingProvider.ME_ORDER_PREFIX + orderId);
             assertThat(envio.getServiceId()).isEqualTo(2);
+            assertThat(envio.getLabelGeneratedAt()).isNotNull();
         });
 
         // gerar a etiqueta avisa o cliente do envio
@@ -174,6 +175,10 @@ public class EndToEndPurchaseFlowTest {
         Order entregue = orderRepository.findById(orderId).orElseThrow();
         assertThat(entregue.getStatus()).isEqualTo(StatusOrder.ENTREGUE);
 
+        // o codigo de rastreio chegou pelo webhook do ME
+        assertThat(shippimentRepository.findAll()).singleElement()
+                .satisfies(envio -> assertThat(envio.getTrackingCode()).isEqualTo(StubShippingProvider.TRACKING_CODE));
+
         // um unico e-mail de entrega, mesmo com o webhook duplicado
         assertThat(outboxEventRepository.findAll())
                 .extracting(ev -> ev.getType())
@@ -185,8 +190,8 @@ public class EndToEndPurchaseFlowTest {
         mockMvc.perform(post("/api/v1/webhooks/melhorenvio")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"shipment_id":"stub-me-order-%s","status":"delivered","tracking":"%s"}
-                                """.formatted(orderId, StubShippingProvider.TRACKING_CODE)))
+                                {"shipment_id":"%s","status":"delivered","tracking":"%s"}
+                                """.formatted(StubShippingProvider.ME_ORDER_PREFIX + orderId, StubShippingProvider.TRACKING_CODE)))
                 .andExpect(status().isOk())
                 .andExpect(content().string(""));
     }

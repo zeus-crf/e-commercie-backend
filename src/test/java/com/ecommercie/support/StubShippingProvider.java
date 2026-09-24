@@ -1,31 +1,34 @@
 package com.ecommercie.support;
 
 import com.ecommercie.melhor_envio.ShippingProvider;
+import com.ecommercie.melhor_envio.dto.EtiquetaRequest;
 import com.ecommercie.melhor_envio.dto.ShippingQuote;
 import com.ecommercie.melhor_envio.dto.ShippingQuoteRequest;
 import com.ecommercie.melhor_envio.models.Shipment;
-import com.ecommercie.melhor_envio.repository.ShippimentRepository;
-import com.ecommercie.pedido.models.Order;
+import org.springframework.http.HttpStatus;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.web.client.HttpClientErrorException;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
 import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
- * Stub do frete. Espelha os efeitos colaterais do MelhorEnvioClient.buyLabel, que alem de chamar
- * a API faz as transicoes do pedido: PAGO -> EM_SEPARACAO -> ENVIADO, e persiste o Shipment.
- * Sem isso o fluxo ponta a ponta nunca chega em ENVIADO.
+ * Stub da API do Melhor Envio. So finge a API: nao muda status nem grava nada no banco
+ * (isso e do ShippingService). Registra as chamadas e pode falhar sob demanda.
+ * E um singleton do contexto de teste: chame reset() no @BeforeEach.
  */
 public class StubShippingProvider implements ShippingProvider {
 
     public static final String TRACKING_CODE = "STUB123456789BR";
     public static final BigDecimal PRECO_PAC = new BigDecimal("25.90");
+    public static final String ME_ORDER_PREFIX = "stub-me-order-";
 
-    private final ShippimentRepository shippimentRepository;
-
-    public StubShippingProvider(ShippimentRepository shippimentRepository) {
-        this.shippimentRepository = shippimentRepository;
-    }
+    private final List<EtiquetaRequest> carrinhos = new CopyOnWriteArrayList<>();
+    private final List<String> compras = new CopyOnWriteArrayList<>();
+    private final List<Boolean> transacaoAtivaNasChamadas = new CopyOnWriteArrayList<>();
+    private volatile boolean falharNoCarrinho;
+    private volatile boolean falharNaCompra;
 
     @Override
     public List<ShippingQuote> quote(ShippingQuoteRequest request) {
@@ -36,26 +39,40 @@ public class StubShippingProvider implements ShippingProvider {
     }
 
     @Override
-    public Shipment buyLabel(Order order, int serviceId) {
-        order.markSeparando();
+    public String adicionarAoCarrinho(EtiquetaRequest request) {
+        transacaoAtivaNasChamadas.add(TransactionSynchronizationManager.isActualTransactionActive());
+        if (falharNoCarrinho) {
+            throw new HttpClientErrorException(HttpStatus.UNPROCESSABLE_ENTITY, "stub: falha ao criar carrinho");
+        }
+        carrinhos.add(request);
+        return ME_ORDER_PREFIX + request.orderId();
+    }
 
-        Shipment shipment = shippimentRepository.save(Shipment.builder()
-                .order(order)
-                .meOrderId("stub-me-order-" + order.getId())
-                .meProtocol("stub-protocol")
-                .serviceId(serviceId)
-                .trackingCode(TRACKING_CODE)
-                .trackingStatus("posted")
-                .price(PRECO_PAC)
-                .labelGeneratedAt(LocalDateTime.now())
-                .build());
-
-        order.markEnviando();
-        return shipment;
+    @Override
+    public void finalizarCompra(String meOrderId) {
+        transacaoAtivaNasChamadas.add(TransactionSynchronizationManager.isActualTransactionActive());
+        if (falharNaCompra) {
+            throw new HttpClientErrorException(HttpStatus.UNPROCESSABLE_ENTITY, "stub: saldo insuficiente");
+        }
+        compras.add(meOrderId);
     }
 
     @Override
     public void cancelLabel(Shipment shipment) {
         // no-op: nao ha etiqueta real para cancelar
     }
+
+    public void reset() {
+        carrinhos.clear();
+        compras.clear();
+        transacaoAtivaNasChamadas.clear();
+        falharNoCarrinho = false;
+        falharNaCompra = false;
+    }
+
+    public void falharNoCarrinho(boolean falhar) { this.falharNoCarrinho = falhar; }
+    public void falharNaCompra(boolean falhar) { this.falharNaCompra = falhar; }
+    public List<EtiquetaRequest> carrinhos() { return carrinhos; }
+    public List<String> compras() { return compras; }
+    public List<Boolean> transacaoAtivaNasChamadas() { return transacaoAtivaNasChamadas; }
 }

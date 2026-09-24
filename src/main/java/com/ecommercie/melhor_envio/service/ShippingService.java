@@ -1,19 +1,22 @@
 package com.ecommercie.melhor_envio.service;
 
+import com.ecommercie.fiscal.service.FiscalService;
 import com.ecommercie.melhor_envio.ShippingProvider;
+import com.ecommercie.melhor_envio.dto.EtiquetaRequest;
 import com.ecommercie.melhor_envio.dto.ShippingQuote;
 import com.ecommercie.melhor_envio.dto.ShippingQuoteRequest;
 import com.ecommercie.melhor_envio.models.Shipment;
-import com.ecommercie.outbox.OutboxTypes;
-import com.ecommercie.outbox.dispatcher.OutboxDispatcher;
-import com.ecommercie.outbox.service.OutboxService;
+import com.ecommercie.melhor_envio.repository.ShippimentRepository;
 import com.ecommercie.pedido.models.Order;
+import com.ecommercie.pedido.models.StatusOrder;
 import com.ecommercie.pedido.repository.OrderRepository;
+import com.ecommercie.pedido.service.OrderService;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Service
@@ -22,7 +25,9 @@ public class ShippingService {
 
     private final ShippingProvider shippingProvider;
     private final OrderRepository orderRepository;
-    private final OutboxService outboxService;
+    private final ShippimentRepository shippimentRepository;
+    private final OrderService orderService;
+    private final FiscalService fiscalService;
 
     public List<ShippingQuote> quote(ShippingQuoteRequest request){
         return shippingProvider.quote(request);
@@ -35,11 +40,27 @@ public class ShippingService {
         if (order.getShippingServiceId() == null) {
             throw new IllegalStateException("Pedido não possui transportadora selecionada (shippingServiceId null). Use um pedido feito após a seleção de frete.");
         }
-        Shipment shipment = shippingProvider.buyLabel(order, order.getShippingServiceId());
-        // o buyLabel ja marcou o pedido como ENVIADO (ver pendencia no README: a transicao deveria estar aqui)
-        outboxService.registrar(OutboxTypes.EMAIL_PEDIDO_ENVIADO,
-                new OutboxDispatcher.EmailPayload(order.getId(), order.getUser().getEmail()));
+        // valida ANTES de chamar o ME: nada de comprar etiqueta para pedido que nao pode ser enviado
+        if (order.getStatus() != StatusOrder.PAGO && order.getStatus() != StatusOrder.EM_SEPARACAO) {
+            throw new IllegalStateException("Só é possível gerar etiqueta para pedido pago ou em separação (status atual: " + order.getStatus() + ")");
+        }
+        if (order.getStatus() == StatusOrder.PAGO) {
+            orderService.marcarSeparando(order);
+        }
+
+        EtiquetaRequest request = EtiquetaRequest.from(order, order.getShippingServiceId(),
+                fiscalService.buscarPorPedido(orderId));
+        String meOrderId = shippingProvider.adicionarAoCarrinho(request);
+        shippingProvider.finalizarCompra(meOrderId);
+
+        Shipment shipment = shippimentRepository.save(Shipment.builder()
+                .order(order)
+                .meOrderId(meOrderId)
+                .serviceId(order.getShippingServiceId())
+                .labelGeneratedAt(LocalDateTime.now())
+                .build());
+
+        orderService.marcarEnviado(order);
         return shipment;
     }
-
 }

@@ -1,30 +1,24 @@
 package com.ecommercie.melhor_envio.client;
 
-import com.ecommercie.fiscal.service.FiscalService;
 import com.ecommercie.melhor_envio.ShippingProvider;
 import com.ecommercie.melhor_envio.dto.*;
 import com.ecommercie.melhor_envio.models.Shipment;
-import com.ecommercie.melhor_envio.repository.ShippimentRepository;
-import com.ecommercie.pedido.models.Order;
-import com.ecommercie.pedido.models.OrderItem;
-import com.ecommercie.pedido.models.StatusOrder;
-import com.ecommercie.pedido.repository.OrderRepository;
-import jakarta.persistence.EntityNotFoundException;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.ParameterizedTypeReference;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestClient;
 
-import org.springframework.http.MediaType;
-
 import java.math.BigDecimal;
-import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * Adapter HTTP do Melhor Envio. So monta os payloads e chama a API: nao le nem grava no banco
+ * e nao muda status de pedido (isso e do ShippingService / OrderService).
+ */
 @Slf4j
 @Service
 public class MelhorEnvioClient implements ShippingProvider {
@@ -34,21 +28,12 @@ public class MelhorEnvioClient implements ShippingProvider {
 
     private final RestClient restClient;
     private final ObjectMapper objectMapper = new ObjectMapper();
-    private final OrderRepository orderRepository;
-    private final ShippimentRepository shippimentRepository;
-    private final FiscalService fiscalService;
-
 
     public MelhorEnvioClient(
             @Value("${melhorenvio.base-url}") String baseUrl,
             @Value("${melhorenvio.token}") String token,
-            @Value("${melhorenvio.user-agent}") String userAgent,
-            OrderRepository orderRepository,
-            ShippimentRepository shippimentRepository, FiscalService fiscalService
+            @Value("${melhorenvio.user-agent}") String userAgent
     ) {
-        this.orderRepository = orderRepository;
-        this.shippimentRepository = shippimentRepository;
-        this.fiscalService = fiscalService;
         this.restClient = RestClient.builder()
                 .baseUrl(baseUrl)
                 .defaultHeader("Authorization", token)
@@ -56,7 +41,6 @@ public class MelhorEnvioClient implements ShippingProvider {
                 .defaultHeader("Accept", "application/json")
                 .build();
     }
-
 
     @Override
     public List<ShippingQuote> quote(ShippingQuoteRequest request) {
@@ -90,91 +74,38 @@ public class MelhorEnvioClient implements ShippingProvider {
     }
 
     @Override
-    @Transactional
-    public Shipment buyLabel(Order order, int serviceId) {
-         order = orderRepository.findById(order.getId())
-                 .orElseThrow(() -> new EntityNotFoundException("Pedido não encontrado"));
+    public String adicionarAoCarrinho(EtiquetaRequest request) {
+        var d = request.destinatario();
+        MeCartRequest.MeAddress to = new MeCartRequest.MeAddress(
+                d.nome(), "(11) 99999-9999", d.email(), d.documento(), d.cep(),
+                d.logradouro(), d.numero(), d.bairro(), d.cidade(), d.uf(), "BR");
 
-        if (order.getStatus() == StatusOrder.PAGO) {
-            order.markSeparando();
-        }
+        MeCartRequest.MeAddress remetente = new MeCartRequest.MeAddress(
+                "Loja", "(21) 99999-9999", "loja@gmail.com", "111.444.777-35", "25240-120",
+                "Rua da Loja", "10", "Centro", "Petrópolis", "RJ", "BR");
 
-         List<MeCartRequest.MeProduct> products = order.getItens().stream()
-                 .map(i -> new MeCartRequest.MeProduct(i.getNomeProduto(), i.getQuantidade(), i.getPrecoUnitario()))
-                 .toList();
+        List<MeCartRequest.MeProduct> products = request.itens().stream()
+                .map(i -> new MeCartRequest.MeProduct(i.nome(), i.quantidade(), i.precoUnitario()))
+                .toList();
 
-        MeCartRequest.MeAddress address = new MeCartRequest.MeAddress(
-                order.getUser().getNome(),
-                "(11) 99999-9999",
-                order.getUser().getEmail(),
-                order.getUser().getCpfCnpj(),
-                order.getAddress().getCep(),
-                order.getAddress().getLogradouro(),
-                order.getAddress().getNumero(),
-                order.getAddress().getBairro(),
-                order.getAddress().getCidade(),
-                order.getAddress().getUf(),
-                "BR"
-        );
+        List<MeCartRequest.MeVolume> volumes = request.itens().stream()
+                .map(i -> new MeCartRequest.MeVolume(
+                        i.pesoKg().multiply(BigDecimal.valueOf(i.quantidade())),
+                        i.larguraCm(), i.alturaCm(), i.comprimentoCm()))
+                .toList();
 
-        MeCartRequest.MeAddress from = new MeCartRequest.MeAddress(
-                "Loja",
-                "(21) 99999-9999",
-                "loja@gmail.com",
-                "111.444.777-35",
-                "25240-120",
-                "Rua da Loja",
-                "10",
-                "Centro",
-                "Petrópolis",
-                "RJ",
-                "BR"
-        );
-
-        List<MeCartRequest.MeVolume> volumes = new ArrayList<>();
-
-        MeCartRequest.MeOptions options = null;
-        var invoiceOpt = fiscalService.buscarPorPedido(order.getId());
-        if (invoiceOpt.isPresent()){
-            var invoice = invoiceOpt.get();
-            if (invoice.getChave() != null && !invoice.getChave().isBlank()){
-                options = switch (invoice.getTipo()){
-                    // DC-e vai em options.dce.key; NF-e em options.invoice.key.
-                    case DCE -> new MeCartRequest.MeOptions(
-                            null, new MeCartRequest.MeOptions.MeDce(invoice.getChave())
-                    );
-                    case NFE -> new MeCartRequest.MeOptions(
-                            new MeCartRequest.MeOptions.MeInvoice(invoice.getChave()), null
-                    );
-                    default -> null;
-                };
-            }
-        }
-
-        for (OrderItem item : order.getItens()) {
-
-            MeCartRequest.MeVolume volume = new MeCartRequest.MeVolume(
-                    item.getProduct().getPesoKg().multiply(BigDecimal.valueOf(item.getQuantidade())),
-                    item.getProduct().getLarguraCm(),
-                    item.getProduct().getAlturaCm(),
-                    item.getProduct().getComprimentoCm()
-            );
-
-            volumes.add(volume);
-        }
-
-        BigDecimal insuranceValue = order.getItens().stream()
-                .map(i -> i.getPrecoUnitario().multiply(BigDecimal.valueOf(i.getQuantidade())))
+        BigDecimal insuranceValue = request.itens().stream()
+                .map(i -> i.precoUnitario().multiply(BigDecimal.valueOf(i.quantidade())))
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
         MeCartRequest requestCart = new MeCartRequest(
-                serviceId,
-                from,
-                address,
+                request.serviceId(),
+                remetente,
+                to,
                 products,
                 volumes,
                 insuranceValue.compareTo(BigDecimal.ZERO) > 0 ? insuranceValue : null,
-                options
+                opcoesFiscais(request.documentoFiscal())
         );
 
         try {
@@ -190,27 +121,33 @@ public class MelhorEnvioClient implements ShippingProvider {
                 .retrieve()
                 .body(MeCartResponse.class);
 
+        return cartResponse.id();
+    }
+
+    @Override
+    public void finalizarCompra(String meOrderId) {
         restClient.post()
                 .uri("/api/v2/me/shipment/checkout")
                 .contentType(MediaType.APPLICATION_JSON)
-                .body(new MeCheckoutRequest(List.of(cartResponse.id())))
+                .body(new MeCheckoutRequest(List.of(meOrderId)))
                 .retrieve()
                 .toBodilessEntity();
-
-        Shipment shipment = shippimentRepository.save(Shipment.builder()
-                .order(order)
-                .meOrderId(cartResponse.id())
-                .serviceId(serviceId)
-                .labelGeneratedAt(java.time.LocalDateTime.now())
-                .build());
-
-        order.markEnviando();
-
-        return shipment;
     }
 
     @Override
     public void cancelLabel(Shipment shipment) {
 
+    }
+
+    // DC-e vai em options.dce.key; NF-e em options.invoice.key.
+    private MeCartRequest.MeOptions opcoesFiscais(EtiquetaRequest.DocumentoFiscal documento) {
+        if (documento == null) {
+            return null;
+        }
+        return switch (documento.tipo()) {
+            case DCE -> new MeCartRequest.MeOptions(null, new MeCartRequest.MeOptions.MeDce(documento.chave()));
+            case NFE -> new MeCartRequest.MeOptions(new MeCartRequest.MeOptions.MeInvoice(documento.chave()), null);
+            default -> null;
+        };
     }
 }

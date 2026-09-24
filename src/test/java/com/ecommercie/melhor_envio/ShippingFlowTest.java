@@ -20,6 +20,7 @@ import com.ecommercie.security.models.User;
 import com.ecommercie.security.repository.UserRepository;
 import com.ecommercie.support.DatabaseCleaner;
 import com.ecommercie.support.ExternalStubsConfiguration;
+import com.ecommercie.support.StubShippingProvider;
 import com.jayway.jsonpath.JsonPath;
 import jakarta.servlet.http.Cookie;
 import org.junit.jupiter.api.BeforeEach;
@@ -61,6 +62,7 @@ class ShippingFlowTest {
     @Autowired UserRepository userRepository;
     @Autowired PasswordEncoder passwordEncoder;
     @Autowired DatabaseCleaner databaseCleaner;
+    @Autowired StubShippingProvider shippingStub;
 
     private static final String ENDERECO = """
             { "logradouro":"Rua A","numero":"10","bairro":"Centro","cidade":"Sao Paulo","uf":"SP","cep":"01000000","serviceId":2,"valorFrete":15.00 }
@@ -69,6 +71,57 @@ class ShippingFlowTest {
     @BeforeEach
     void limpar() {
         databaseCleaner.limparTudo();
+        shippingStub.reset();
+    }
+
+    // ----------------- etiqueta -----------------
+
+    @Test
+    void gerarEtiqueta_levaPagoAteEnviado_gravaEnvio_eAvisaCliente() throws Exception {
+        String orderId = pedidoPago();
+
+        mockMvc.perform(post("/api/v1/admin/orders/{id}/label", orderId).cookie(adminCookie()))
+                .andExpect(status().isOk());
+
+        assertThat(orderRepository.findById(orderId).orElseThrow().getStatus()).isEqualTo(StatusOrder.ENVIADO);
+        assertThat(shippimentRepository.findAll()).singleElement().satisfies(envio -> {
+            assertThat(envio.getMeOrderId()).isEqualTo(StubShippingProvider.ME_ORDER_PREFIX + orderId);
+            assertThat(envio.getServiceId()).isEqualTo(2);
+            assertThat(envio.getLabelGeneratedAt()).isNotNull();
+        });
+        assertThat(outboxEventRepository.findAll())
+                .extracting(ev -> ev.getType())
+                .filteredOn(OutboxTypes.EMAIL_PEDIDO_ENVIADO::equals)
+                .hasSize(1);
+
+        // o client recebeu um snapshot com os dados do pedido
+        assertThat(shippingStub.carrinhos()).singleElement().satisfies(req -> {
+            assertThat(req.orderId()).isEqualTo(orderId);
+            assertThat(req.serviceId()).isEqualTo(2);
+            assertThat(req.destinatario().email()).isEqualTo("cli@test.com");
+            assertThat(req.destinatario().cep()).isEqualTo("01000000");
+            assertThat(req.itens()).singleElement().satisfies(item -> {
+                assertThat(item.quantidade()).isEqualTo(2);
+                assertThat(item.precoUnitario()).isEqualByComparingTo("50.00");
+            });
+            assertThat(req.documentoFiscal()).isNull();   // fiscal desligado nos testes
+        });
+        assertThat(shippingStub.compras()).containsExactly(StubShippingProvider.ME_ORDER_PREFIX + orderId);
+    }
+
+    @Test
+    void gerarEtiqueta_pedidoNaoPago_recusaSemChamarOMelhorEnvio() throws Exception {
+        String orderId = pedidoPago();
+        Order order = orderRepository.findById(orderId).orElseThrow();
+        order.markSeparando();
+        order.markEnviando();                  // ja ENVIADO: nao pode gerar etiqueta de novo
+        orderRepository.save(order);
+
+        mockMvc.perform(post("/api/v1/admin/orders/{id}/label", orderId).cookie(adminCookie()))
+                .andExpect(status().isUnprocessableEntity());
+
+        assertThat(shippingStub.carrinhos()).isEmpty();
+        assertThat(shippingStub.compras()).isEmpty();
     }
 
     // ----------------- rastreio -----------------
