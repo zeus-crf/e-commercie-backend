@@ -34,6 +34,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -177,7 +178,8 @@ public class EndToEndPurchaseFlowTest {
                             .content("""
                                     {"type":"payment","data":{"id":"%s"}}
                                     """.formatted(PAYMENT_ID)))
-                    .andExpect(status().isOk());
+                    .andExpect(status().isOk())
+                    .andExpect(content().string(""));   // 200 puro, sem envelope ApiResponse
         }
     }
 

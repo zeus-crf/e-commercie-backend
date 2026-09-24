@@ -2,7 +2,6 @@ package com.ecommercie.mercado_pago.controller;
 
 import com.ecommercie.mercado_pago.dtos.MercadoPagoNotification;
 import com.ecommercie.mercado_pago.service.WebhookService;
-import com.ecommercie.shared.ApiResponse;
 import com.mercadopago.exceptions.MPApiException;
 import com.mercadopago.exceptions.MPException;
 import io.swagger.v3.oas.annotations.Operation;
@@ -22,9 +21,10 @@ public class WebhookController {
     private final WebhookService webhookService;
 
     @Operation(summary = "Recebe notificações do Mercado Pago",
-            description = "Chamado pelo provedor externo. Aceita os formatos webhook (type/data.id) e IPN (topic/id). Responde 500 em falha de comunicação com o MP, para que ele reenvie")
+            description = "Chamado pelo provedor externo. Aceita os formatos webhook (type/data.id) e IPN (topic/id). "
+                        + "Responde 200 OK puro, sem o envelope ApiResponse. Responde 500 em falha de comunicação com o MP, para que ele reenvie")
     @PostMapping("/mercadopago")
-    public ResponseEntity<ApiResponse<Void>> receberNotificacao(
+    public ResponseEntity<Void> receberNotificacao(
             @RequestBody(required = false) MercadoPagoNotification notification,
             @RequestParam(required = false) String id,
             @RequestParam(required = false) String topic) {
@@ -43,7 +43,7 @@ public class WebhookController {
 
         if (paymentId == null) {
             log.info("Webhook MP ignorado: tipo={} sem id", tipo);
-            return ResponseEntity.ok(ApiResponse.ok("ok", null));
+            return ResponseEntity.ok().build();
         }
 
         try {

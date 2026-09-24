@@ -34,8 +34,8 @@ public class OpenApiConfig {
 
                                 **Envelope padrao:** as respostas seguem
                                 `{ "success": boolean, "message": string|null, "data": T|null }`.
-                                Campos nulos sao omitidos. Excecao: o webhook do Melhor Envio
-                                (`/api/v1/webhooks/melhorenvio`) responde `200 OK` puro, sem envelope.
+                                Campos nulos sao omitidos. Excecao: os endpoints de `/api/v1/webhooks/**`,
+                                chamados pelos provedores externos, respondem `200 OK` puro, sem envelope.
 
                                 **Autenticacao:** cookies httpOnly `access_token` + `refresh_token`,
                                 emitidos por `POST /api/v1/auth/login`. Nao ha token no corpo nem no header.
