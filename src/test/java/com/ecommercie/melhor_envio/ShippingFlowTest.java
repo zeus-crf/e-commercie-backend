@@ -38,6 +38,7 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.withinPercentage;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -137,37 +138,103 @@ class ShippingFlowTest {
         assertThat(shippingStub.transacaoAtivaNasChamadas()).containsExactly(false, false);
     }
 
+
+
     @Test
-    void falhaNaCompra_deixaEnvioPendente_eRetryReaproveitaOCarrinho() throws Exception {
+    void compraRecusadaPeloMe_descartaPendente_eRetryCriaCarrinhoNovo() throws Exception {
+
         String orderId = pedidoPago();
         Cookie admin = adminCookie();
-        shippingStub.falharNaCompra(true);
+        shippingStub.falharNaCompra(true); // 422: o ME recusou o não cobrou
 
         mockMvc.perform(post("/api/v1/admin/orders/{id}/label", orderId).cookie(admin))
                 .andExpect(status().isUnprocessableEntity());
 
-        // o carrinho foi criado e ficou registrado; o pedido esta separado, mas nao enviado
+
         assertThat(orderRepository.findById(orderId).orElseThrow().getStatus()).isEqualTo(StatusOrder.EM_SEPARACAO);
-        assertThat(shippimentRepository.findAll()).singleElement().satisfies(envio -> {
-            assertThat(envio.getMeOrderId()).isEqualTo(StubShippingProvider.ME_ORDER_PREFIX + orderId);
-            assertThat(envio.getLabelGeneratedAt()).isNull();   // pendente
-        });
+        assertThat(shippimentRepository.findAll()).isEmpty();
         assertThat(outboxEventRepository.findAll()).extracting(ev -> ev.getType())
                 .doesNotContain(OutboxTypes.EMAIL_PEDIDO_ENVIADO);
 
-        // retry: nao cria outro carrinho, so tenta pagar o mesmo
         shippingStub.falharNaCompra(false);
         mockMvc.perform(post("/api/v1/admin/orders/{id}/label", orderId).cookie(admin))
                 .andExpect(status().isOk());
 
-        assertThat(shippingStub.carrinhos()).hasSize(1);
-        assertThat(shippingStub.compras()).containsExactly(StubShippingProvider.ME_ORDER_PREFIX + orderId);
+        assertThat(shippingStub.carrinhos()).hasSize(2);
+        assertThat(shippingStub.compras()).hasSize(1);
+
         assertThat(orderRepository.findById(orderId).orElseThrow().getStatus()).isEqualTo(StatusOrder.ENVIADO);
-        assertThat(shippimentRepository.findAll()).singleElement()
-                .satisfies(envio -> assertThat(envio.getLabelGeneratedAt()).isNotNull());
         assertThat(outboxEventRepository.findAll()).extracting(ev -> ev.getType())
                 .filteredOn(OutboxTypes.EMAIL_PEDIDO_ENVIADO::equals)
                 .hasSize(1);
+
+
+    }
+
+    @Test
+    void cliqueDuplo_checkoutJaReservado_recebe409SemChamarOMe() throws Exception {
+        String orderId = pedidoSeparadoComEnvioPendente("me-pendente-1", LocalDateTime.now());
+
+        mockMvc.perform(post("/api/v1/admin/orders/{id}/label", orderId).cookie(adminCookie()))
+                .andExpect(status().isConflict());
+
+        assertThat(shippingStub.transacaoAtivaNasChamadas()).isEmpty();   // nenhuma chamada ao ME
+        assertThat(orderRepository.findById(orderId).orElseThrow().getStatus()).isEqualTo(StatusOrder.EM_SEPARACAO);
+    }
+
+    @Test
+    void reservaExpirada_retryReaproveitaCarrinho_eConclui() throws Exception {
+        String orderId = pedidoSeparadoComEnvioPendente("me-pendente-2", LocalDateTime.now().minusMinutes(10));
+
+        mockMvc.perform(post("/api/v1/admin/orders/{id}/label", orderId).cookie(adminCookie()))
+                .andExpect(status().isOk());
+
+        assertThat(shippingStub.carrinhos()).isEmpty();
+        assertThat(shippingStub.compras()).containsExactly("me-pendente-2");
+        assertThat(orderRepository.findById(orderId).orElseThrow().getStatus()).isEqualTo(StatusOrder.ENVIADO);
+    }
+
+    @Test
+    void corridaAoGravarPendente_segundaRequisicaoRecebe409SemPagar() throws Exception {
+        String orderId = pedidoPago();
+        // outra requisicao grava o envio deste pedido enquanto esta ainda criava o carrinho
+        shippingStub.aoCriarCarrinho(() -> shippimentRepository.save(Shipment.builder()
+                .order(orderRepository.findById(orderId).orElseThrow())
+                .meOrderId("carrinho-da-outra-requisicao")
+                .serviceId(2)
+                .checkoutIniciadoEm(LocalDateTime.now())
+                .build()));
+
+        mockMvc.perform(post("/api/v1/admin/orders/{id}/label", orderId).cookie(adminCookie()))
+                .andExpect(status().isConflict());
+
+        assertThat(shippingStub.compras()).isEmpty();
+        assertThat(shippimentRepository.findAll()).singleElement()
+                .satisfies(envio -> assertThat(envio.getMeOrderId()).isEqualTo("carrinho-da-outra-requisicao"));
+    }
+
+    @Test
+    void compraSemResposta_mantemPendenteReservado_eBloqueiaRetryImediato() throws Exception {
+        String orderId = pedidoPago();
+        Cookie admin = adminCookie();
+        shippingStub.falharNaCompraSemResposta(true);   // timeout: nao se sabe se cobrou
+
+        mockMvc.perform(post("/api/v1/admin/orders/{id}/label", orderId).cookie(admin))
+                .andExpect(status().isConflict());
+
+        assertThat(shippimentRepository.findAll()).singleElement().satisfies(envio -> {
+            assertThat(envio.getLabelGeneratedAt()).isNull();
+            assertThat(envio.getCheckoutIniciadoEm()).isNotNull();
+        });
+
+        // retry imediato: a reserva bloqueia, sem nenhuma chamada nova ao ME
+        shippingStub.falharNaCompraSemResposta(false);
+        mockMvc.perform(post("/api/v1/admin/orders/{id}/label", orderId).cookie(admin))
+                .andExpect(status().isConflict());
+
+        assertThat(shippingStub.transacaoAtivaNasChamadas()).hasSize(2);   // so carrinho + 1 compra
+        assertThat(shippingStub.compras()).isEmpty();
+        assertThat(orderRepository.findById(orderId).orElseThrow().getStatus()).isEqualTo(StatusOrder.EM_SEPARACAO);
     }
 
     @Test
@@ -270,6 +337,21 @@ class ShippingFlowTest {
         Order order = orderRepository.findById(orderId).orElseThrow();
         order.markPaid();
         orderRepository.save(order);
+        return orderId;
+    }
+
+    /** Pedido EM_SEPARACAO com um envio pendente (sem etiqueta) reservado no instante dado. */
+    private String pedidoSeparadoComEnvioPendente(String meOrderId, LocalDateTime checkoutIniciadoEm) throws Exception {
+        String orderId = pedidoPago();
+        Order order = orderRepository.findById(orderId).orElseThrow();
+        order.markSeparando();
+        orderRepository.save(order);
+        shippimentRepository.save(Shipment.builder()
+                .order(order)
+                .meOrderId(meOrderId)
+                .serviceId(2)
+                .checkoutIniciadoEm(checkoutIniciadoEm)
+                .build());
         return orderId;
     }
 
