@@ -92,7 +92,7 @@ public class GlobalExceptionHandler {
                 .body(ApiResponse.error("Erro interno no servidor"));
     }
 
-
+    @ExceptionHandler(ConflitoException.class)
     public ResponseEntity<ApiResponse<Void>> handleConflito(ConflitoException ex) {
         return ResponseEntity.status(HttpStatus.CONFLICT)
                 .body(ApiResponse.error(ex.getMessage()));
