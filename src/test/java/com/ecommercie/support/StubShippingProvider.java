@@ -8,6 +8,7 @@ import com.ecommercie.melhor_envio.models.Shipment;
 import org.springframework.http.HttpStatus;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.client.HttpClientErrorException;
+import org.springframework.web.client.ResourceAccessException;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -29,6 +30,8 @@ public class StubShippingProvider implements ShippingProvider {
     private final List<Boolean> transacaoAtivaNasChamadas = new CopyOnWriteArrayList<>();
     private volatile boolean falharNoCarrinho;
     private volatile boolean falharNaCompra;
+    private volatile boolean falharNaCompraSemResposta;
+    private volatile Runnable aoCriarCarrinho;
 
     @Override
     public List<ShippingQuote> quote(ShippingQuoteRequest request) {
@@ -45,6 +48,10 @@ public class StubShippingProvider implements ShippingProvider {
             throw new HttpClientErrorException(HttpStatus.UNPROCESSABLE_ENTITY, "stub: falha ao criar carrinho");
         }
         carrinhos.add(request);
+        Runnable gancho = aoCriarCarrinho;
+        if (gancho != null) {
+            gancho.run();   // simula outra requisicao agindo enquanto esta falava com o ME
+        }
         return ME_ORDER_PREFIX + request.orderId();
     }
 
@@ -53,6 +60,9 @@ public class StubShippingProvider implements ShippingProvider {
         transacaoAtivaNasChamadas.add(TransactionSynchronizationManager.isActualTransactionActive());
         if (falharNaCompra) {
             throw new HttpClientErrorException(HttpStatus.UNPROCESSABLE_ENTITY, "stub: saldo insuficiente");
+        }
+        if (falharNaCompraSemResposta) {
+            throw new ResourceAccessException("stub: timeout no checkout (nao se sabe se cobrou)");
         }
         compras.add(meOrderId);
     }
@@ -68,6 +78,8 @@ public class StubShippingProvider implements ShippingProvider {
         transacaoAtivaNasChamadas.clear();
         falharNoCarrinho = false;
         falharNaCompra = false;
+        falharNaCompraSemResposta = false;
+        aoCriarCarrinho = null;
     }
 
     public void falharNoCarrinho(boolean falhar) { this.falharNoCarrinho = falhar; }
@@ -75,4 +87,6 @@ public class StubShippingProvider implements ShippingProvider {
     public List<EtiquetaRequest> carrinhos() { return carrinhos; }
     public List<String> compras() { return compras; }
     public List<Boolean> transacaoAtivaNasChamadas() { return transacaoAtivaNasChamadas; }
+    public void falharNaCompraSemResposta(boolean falhar) { this.falharNaCompraSemResposta = falhar; }
+    public void aoCriarCarrinho(Runnable gancho) { this.aoCriarCarrinho = gancho; }
 }
