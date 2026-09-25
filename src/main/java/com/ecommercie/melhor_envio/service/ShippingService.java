@@ -11,11 +11,16 @@ import com.ecommercie.pedido.models.Order;
 import com.ecommercie.pedido.models.StatusOrder;
 import com.ecommercie.pedido.repository.OrderRepository;
 import com.ecommercie.pedido.service.OrderService;
+import com.ecommercie.shared.ConflitoException;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.web.client.HttpClientErrorException;
+import org.springframework.web.client.RestClientException;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -30,6 +35,7 @@ public class ShippingService {
     private final FiscalService fiscalService;
     // o Spring Boot ja registra um TransactionTemplate para o transaction manager do JPA
     private final TransactionTemplate transactionTemplate;
+    static final Duration JANELA_CHECKOUT = Duration.ofMinutes(5);
 
     public List<ShippingQuote> quote(ShippingQuoteRequest request){
         return shippingProvider.quote(request);
@@ -52,12 +58,13 @@ public class ShippingService {
 
         String meOrderId = preparo.meOrderIdPendente();
         if (meOrderId == null) {
-            String novo = shippingProvider.adicionarAoCarrinho(preparo.request());
-            transactionTemplate.executeWithoutResult(tx -> registrarPendente(orderId, novo));
-            meOrderId = novo;
+            meOrderId = shippingProvider.adicionarAoCarrinho(preparo.request());
+            registrarPendenteReservado(orderId, meOrderId);
+        } else {
+            reservarCheckout(orderId);
         }
 
-        shippingProvider.finalizarCompra(meOrderId);
+        comprar(orderId, meOrderId);
 
         return transactionTemplate.execute(tx -> concluir(orderId));
     }
@@ -79,6 +86,7 @@ public class ShippingService {
         }
 
         String pendente = shippimentRepository.findByOrderId(orderId)
+                .filter(envio -> envio.getLabelGeneratedAt() == null)
                 .map(Shipment::getMeOrderId)
                 .orElse(null);
 
@@ -104,5 +112,48 @@ public class ShippingService {
         shipment.setLabelGeneratedAt(LocalDateTime.now());
         orderService.marcarEnviado(order);
         return shipment;
+    }
+
+    private void registrarPendenteReservado(String orderId, String meOrderId) {
+        try {
+            transactionTemplate.executeWithoutResult(tx -> {
+                Order order = orderRepository.getReferenceById(orderId);
+                shippimentRepository.saveAndFlush(Shipment.builder()
+                        .order(order)
+                        .meOrderId(meOrderId)
+                        .serviceId(order.getShippingServiceId())
+                        .checkoutIniciadoEm(LocalDateTime.now())   // nasce reservado para esta requisicao
+                        .build());                                 // labelGeneratedAt null = pendente
+            });
+        } catch (DataIntegrityViolationException e) {
+            // UNIQUE(pedido_id): outra requisicao gravou o envio deste pedido depois do passo 1.
+            // O carrinho criado por esta fica orfao no ME, mas nao e cobrado.
+            throw new ConflitoException("A etiqueta deste pedido já está sendo gerada. Aguarde e confira o status do pedido.");
+        }
+    }
+
+    private void reservarCheckout(String orderId) {
+        LocalDateTime agora = LocalDateTime.now();
+        Integer reservados = transactionTemplate.execute(tx ->
+                shippimentRepository.reservarCheckout(orderId, agora, agora.minus(JANELA_CHECKOUT)));
+        if (reservados == null || reservados == 0) {
+            throw new ConflitoException("A etiqueta deste pedido já está sendo gerada ou aguarda confirmação do Melhor Envio. "
+                    + "Confira no painel do ME antes de tentar de novo.");
+        }
+    }
+
+    private void comprar(String orderId, String meOrderId) {
+        try {
+            shippingProvider.finalizarCompra(meOrderId);
+        } catch (HttpClientErrorException e) {
+            // 4xx: o ME recusou e nao cobrou. Descarta o pendente para o retry montar um carrinho novo
+            transactionTemplate.executeWithoutResult(tx -> shippimentRepository.descartarPendente(orderId));
+            throw e;
+        } catch (RestClientException e) {
+            // 5xx / timeout: nao da para saber se cobrou. O pendente fica reservado (bloqueia retry
+            // imediato durante a JANELA_CHECKOUT) e o admin confere no painel do ME
+            throw new ConflitoException("Sem resposta confirmada do Melhor Envio ao comprar a etiqueta. "
+                    + "Confira no painel do ME se ela foi paga antes de tentar de novo.");
+        }
     }
 }
