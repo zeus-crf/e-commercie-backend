@@ -13,6 +13,9 @@ spring:
     username: postgres
     password: ${DB_PASSWORD}
   jpa:
+    # sem open-in-view: cada transacao abre e fecha seu EntityManager. Obrigatorio para a geracao
+    # de etiqueta (3 transacoes curtas) nao ler o pedido em cache entre elas.
+    open-in-view: false
     hibernate:
       ddl-auto: update
     show-sql: true
