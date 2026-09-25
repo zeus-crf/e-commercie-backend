@@ -93,4 +93,10 @@ public class GlobalExceptionHandler {
     }
 
 
+    public ResponseEntity<ApiResponse<Void>> handleConflito(ConflitoException ex) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ApiResponse.error(ex.getMessage()));
+    }
+
+
 }
