@@ -4,6 +4,7 @@ import com.ecommercie.melhor_envio.ShippingProvider;
 import com.ecommercie.melhor_envio.dto.EtiquetaRequest;
 import com.ecommercie.melhor_envio.dto.ShippingQuote;
 import com.ecommercie.melhor_envio.dto.ShippingQuoteRequest;
+import com.ecommercie.melhor_envio.enums.SituacaoEtiqueta;
 import com.ecommercie.melhor_envio.models.Shipment;
 import org.springframework.http.HttpStatus;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
@@ -12,6 +13,8 @@ import org.springframework.web.client.ResourceAccessException;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
@@ -32,6 +35,10 @@ public class StubShippingProvider implements ShippingProvider {
     private volatile boolean falharNaCompra;
     private volatile boolean falharNaCompraSemResposta;
     private volatile Runnable aoCriarCarrinho;
+    private final List<String> consultas = new CopyOnWriteArrayList<>();
+    private final Map<String, SituacaoEtiqueta> situacoesForcadas = new ConcurrentHashMap<>();
+    private volatile boolean falharNaConsulta;
+    private volatile boolean cobrarMasPerderResposta;
 
     @Override
     public List<ShippingQuote> quote(ShippingQuoteRequest request) {
@@ -64,7 +71,25 @@ public class StubShippingProvider implements ShippingProvider {
         if (falharNaCompraSemResposta) {
             throw new ResourceAccessException("stub: timeout no checkout (nao se sabe se cobrou)");
         }
+        if (cobrarMasPerderResposta) {
+            compras.add(meOrderId);   // o ME cobrou...
+            throw new ResourceAccessException("stub: cobrou, mas a resposta se perdeu");
+        }
         compras.add(meOrderId);
+    }
+
+    @Override
+    public SituacaoEtiqueta consultarSituacao(String meOrderId) {
+        transacaoAtivaNasChamadas.add(TransactionSynchronizationManager.isActualTransactionActive());
+        consultas.add(meOrderId);
+        if (falharNaConsulta) {
+            throw new ResourceAccessException("stub: ME fora do ar na consulta");
+        }
+        SituacaoEtiqueta forcada = situacoesForcadas.get(meOrderId);
+        if (forcada != null) {
+            return forcada;
+        }
+        return compras.contains(meOrderId) ? SituacaoEtiqueta.PAGA : SituacaoEtiqueta.PENDENTE_NO_CARRINHO;
     }
 
     @Override
@@ -80,6 +105,10 @@ public class StubShippingProvider implements ShippingProvider {
         falharNaCompra = false;
         falharNaCompraSemResposta = false;
         aoCriarCarrinho = null;
+        consultas.clear();
+        situacoesForcadas.clear();
+        falharNaConsulta = false;
+        cobrarMasPerderResposta = false;
     }
 
     public void falharNoCarrinho(boolean falhar) { this.falharNoCarrinho = falhar; }
@@ -89,4 +118,8 @@ public class StubShippingProvider implements ShippingProvider {
     public List<Boolean> transacaoAtivaNasChamadas() { return transacaoAtivaNasChamadas; }
     public void falharNaCompraSemResposta(boolean falhar) { this.falharNaCompraSemResposta = falhar; }
     public void aoCriarCarrinho(Runnable gancho) { this.aoCriarCarrinho = gancho; }
+    public void falharNaConsulta(boolean falhar) { this.falharNaConsulta = falhar; }
+    public void cobrarMasPerderResposta(boolean ativo) { this.cobrarMasPerderResposta = ativo; }
+    public void situacao(String meOrderId, SituacaoEtiqueta situacao) { situacoesForcadas.put(meOrderId, situacao); }
+    public List<String> consultas() { return consultas; }
 }

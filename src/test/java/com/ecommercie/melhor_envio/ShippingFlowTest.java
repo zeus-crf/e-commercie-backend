@@ -7,6 +7,7 @@ import com.ecommercie.catalogo.repository.CategoryRepository;
 import com.ecommercie.catalogo.repository.ProductRepository;
 import com.ecommercie.estoque.model.InventoryItem;
 import com.ecommercie.estoque.repository.InventoryItemRepository;
+import com.ecommercie.melhor_envio.enums.SituacaoEtiqueta;
 import com.ecommercie.melhor_envio.models.Shipment;
 import com.ecommercie.melhor_envio.repository.ShipmentTrackingEventRepository;
 import com.ecommercie.melhor_envio.repository.ShippimentRepository;
@@ -38,6 +39,7 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -299,6 +301,70 @@ class ShippingFlowTest {
         assertThat(shipment.getDeliveredAt()).isNotNull();
     }
 
+
+    @Test
+    void meCobrouMasARespostaSePerdeu_retryConfereNoMe_eConcluiSemPagarDeNovo() throws Exception {
+        String orderId = pedidoPago();
+        Cookie admin = adminCookie();
+        shippingStub.cobrarMasPerderResposta(true);
+
+        mockMvc.perform(post("/api/v1/admin/orders/{id}/label", orderId).cookie(admin))
+                .andExpect(status().isConflict());
+        assertThat(shippingStub.compras()).hasSize(1); // o ME cobrou
+
+
+        expirarReserva(orderId);
+        shippingStub.cobrarMasPerderResposta(false);
+        mockMvc.perform(post("/api/v1/admin/orders/{id}/label", orderId).cookie(admin))
+                .andExpect(status().isOk());
+
+        assertThat(shippingStub.compras()).hasSize(1); // NÃO pagou de novo
+
+        assertThat(shippingStub.consultas()).containsExactly(StubShippingProvider.ME_ORDER_PREFIX + orderId);
+        assertThat(shippingStub.transacaoAtivaNasChamadas()).containsOnly(false);
+        assertThat(orderRepository.findById(orderId).orElseThrow().getStatus()).isEqualTo(StatusOrder.ENVIADO);
+        assertThat(outboxEventRepository.findAll()).extracting(ev -> ev.getType())
+                .filteredOn(OutboxTypes.EMAIL_PEDIDO_ENVIADO::equals)
+                .hasSize(1);
+
+    }
+
+    @Test
+    void pendenteCanceladoNoMe_descartaECriaEtiquetaNova() throws Exception {
+        String orderId = pedidoSeparadoComEnvioPendente("me-cancelado", LocalDateTime.now().minusMinutes(10));
+        shippingStub.situacao("me-cancelado", SituacaoEtiqueta.CANCELADA);
+
+        mockMvc.perform(post("/api/v1/admin/orders/{id}/label", orderId).cookie(adminCookie()))
+                .andExpect(status().isOk());
+
+        assertThat(shippingStub.carrinhos()).hasSize(1);   // etiqueta nova no carrinho do ME
+        assertThat(shippingStub.compras()).containsExactly(StubShippingProvider.ME_ORDER_PREFIX + orderId);
+        assertThat(shippimentRepository.findAll()).singleElement().satisfies(envio -> {
+            assertThat(envio.getMeOrderId()).isEqualTo(StubShippingProvider.ME_ORDER_PREFIX + orderId);
+            assertThat(envio.getLabelGeneratedAt()).isNotNull();
+        });
+    }
+
+    @Test
+    void consultaAoMeFalha_naoPaga_eLiberaParaNovaTentativaNaHora() throws Exception {
+        String orderId = pedidoSeparadoComEnvioPendente("me-pendente-3", LocalDateTime.now().minusMinutes(10));
+        Cookie admin = adminCookie();
+        shippingStub.falharNaConsulta(true);
+
+        mockMvc.perform(post("/api/v1/admin/orders/{id}/label", orderId).cookie(admin))
+                .andExpect(status().isConflict());
+
+        assertThat(shippingStub.compras()).isEmpty();
+        assertThat(shippimentRepository.findAll()).singleElement().satisfies(
+                envio -> assertThat(envio.getCheckoutIniciadoEm()).isNull());
+
+        shippingStub.falharNaConsulta(false);
+        mockMvc.perform(post("/api/v1/admin/orders/{id}/label", orderId).cookie(admin))
+                .andExpect(status().isOk());   // sem esperar a janela
+
+        assertThat(shippingStub.compras()).containsExactly("me-pendente-3");
+    }
+
     // ----------------- helpers -----------------
 
     private void rastreio(String meOrderId, String statusMe) throws Exception {
@@ -317,6 +383,13 @@ class ShippingFlowTest {
                 .serviceId(2)
                 .labelGeneratedAt(LocalDateTime.now())
                 .build());
+    }
+
+    /** Simula que a janela de reserva do checkout (5 min) ja passou. */
+    private void expirarReserva(String orderId) {
+        Shipment envio = shippimentRepository.findByOrderId(orderId).orElseThrow();
+        envio.setCheckoutIniciadoEm(LocalDateTime.now().minusMinutes(10));
+        shippimentRepository.save(envio);
     }
 
     /** Cliente compra 2 unidades e o pedido vai direto para PAGO (o webhook do MP é testado no E2E). */

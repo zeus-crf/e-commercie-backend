@@ -3,6 +3,7 @@ package com.ecommercie.melhor_envio;
 import com.ecommercie.melhor_envio.dto.EtiquetaRequest;
 import com.ecommercie.melhor_envio.dto.ShippingQuote;
 import com.ecommercie.melhor_envio.dto.ShippingQuoteRequest;
+import com.ecommercie.melhor_envio.enums.SituacaoEtiqueta;
 import com.ecommercie.melhor_envio.models.Shipment;
 
 import java.util.List;
@@ -17,4 +18,6 @@ public interface ShippingProvider {
     void finalizarCompra(String meOrderId);
 
     void cancelLabel(Shipment shipment);
+
+    SituacaoEtiqueta consultarSituacao(String meOrderId);
 }

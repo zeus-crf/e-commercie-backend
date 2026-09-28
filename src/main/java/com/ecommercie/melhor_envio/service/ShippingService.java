@@ -5,6 +5,7 @@ import com.ecommercie.melhor_envio.ShippingProvider;
 import com.ecommercie.melhor_envio.dto.EtiquetaRequest;
 import com.ecommercie.melhor_envio.dto.ShippingQuote;
 import com.ecommercie.melhor_envio.dto.ShippingQuoteRequest;
+import com.ecommercie.melhor_envio.enums.SituacaoEtiqueta;
 import com.ecommercie.melhor_envio.models.Shipment;
 import com.ecommercie.melhor_envio.repository.ShippimentRepository;
 import com.ecommercie.pedido.models.Order;
@@ -57,11 +58,21 @@ public class ShippingService {
         Preparo preparo = transactionTemplate.execute(tx -> preparar(orderId));
 
         String meOrderId = preparo.meOrderIdPendente();
+        if (meOrderId != null) {
+            reservarCheckout(orderId);
+            SituacaoEtiqueta situacao = consultarNoMe(orderId, meOrderId);
+            if (situacao == SituacaoEtiqueta.PAGA) {
+                // o ME ja cobrou numa tentativa anterior (a resposta se perdeu): so conclui
+                return transactionTemplate.execute(tx -> concluir(orderId));
+            }
+            if (situacao == SituacaoEtiqueta.CANCELADA) {
+                transactionTemplate.executeWithoutResult(tx -> shippimentRepository.descartarPendente(orderId));
+                meOrderId = null;   // segue como se nao houvesse pendente: etiqueta nova no carrinho do ME
+            }
+        }
         if (meOrderId == null) {
             meOrderId = shippingProvider.adicionarAoCarrinho(preparo.request());
             registrarPendenteReservado(orderId, meOrderId);
-        } else {
-            reservarCheckout(orderId);
         }
 
         comprar(orderId, meOrderId);
@@ -140,6 +151,23 @@ public class ShippingService {
             throw new ConflitoException("A etiqueta deste pedido já está sendo gerada ou aguarda confirmação do Melhor Envio. "
                     + "Confira no painel do ME antes de tentar de novo.");
         }
+    }
+
+    private SituacaoEtiqueta consultarNoMe (String orderId, String meOrderId) {
+        SituacaoEtiqueta situacao;
+
+        try {
+            situacao = shippingProvider.consultarSituacao(meOrderId);
+        } catch (RestClientException e) {
+            situacao = SituacaoEtiqueta.INDEFINIDA;
+        }
+        if (situacao == SituacaoEtiqueta.INDEFINIDA) {
+            // sem resposta confiavel nada e pago no escuro; a reserva e solta para o admin tentar em instantes
+            transactionTemplate.executeWithoutResult(tx -> shippimentRepository.liberarReserva(orderId));
+            throw new ConflitoException("Não foi possível confirmar no Melhor Envio a situação da etiqueta deste pedido. "
+                    + "Tente de novo em instantes ou confira no painel do ME.");
+        }
+        return situacao;
     }
 
     private void comprar(String orderId, String meOrderId) {

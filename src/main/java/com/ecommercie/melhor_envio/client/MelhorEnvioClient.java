@@ -2,6 +2,7 @@ package com.ecommercie.melhor_envio.client;
 
 import com.ecommercie.melhor_envio.ShippingProvider;
 import com.ecommercie.melhor_envio.dto.*;
+import com.ecommercie.melhor_envio.enums.SituacaoEtiqueta;
 import com.ecommercie.melhor_envio.models.Shipment;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -10,6 +11,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
 
 import java.math.BigDecimal;
@@ -40,6 +42,22 @@ public class MelhorEnvioClient implements ShippingProvider {
                 .defaultHeader("User-Agent", userAgent)
                 .defaultHeader("Accept", "application/json")
                 .build();
+    }
+
+    public static SituacaoEtiqueta situacaoDo(MeOrderResponse item) {
+        if (item == null) {
+            return SituacaoEtiqueta.INDEFINIDA;
+        }
+        if (item.canceledAt() != null || item.expiredAt() != null) {
+            return SituacaoEtiqueta.CANCELADA;
+        }
+        if (item.paidAt() != null){
+            return SituacaoEtiqueta.PAGA;
+        }
+        if ("pending".equals(item.status())) {
+            return SituacaoEtiqueta.PENDENTE_NO_CARRINHO;
+        }
+        return SituacaoEtiqueta.INDEFINIDA;
     }
 
     @Override
@@ -137,6 +155,19 @@ public class MelhorEnvioClient implements ShippingProvider {
     @Override
     public void cancelLabel(Shipment shipment) {
 
+    }
+
+    @Override
+    public SituacaoEtiqueta consultarSituacao(String meOrderId) {
+        try {
+            MeOrderResponse item = restClient.get()
+                    .uri("/api/v2/me/orders/{id}", meOrderId)
+                    .retrieve()
+                    .body(MeOrderResponse.class);
+            return situacaoDo(item);
+        } catch (HttpClientErrorException.NotFound e) {
+            return SituacaoEtiqueta.CANCELADA;   // o item nao existe mais no ME
+        }
     }
 
     // DC-e vai em options.dce.key; NF-e em options.invoice.key.
