@@ -365,14 +365,35 @@ class ShippingFlowTest {
         assertThat(shippingStub.compras()).containsExactly("me-pendente-3");
     }
 
+    @Test
+    void rastreioSemCodigo_naoApagaOCodigoJaGravado() throws Exception {
+        String orderId = pedidoPago();
+        Order order = orderRepository.findById(orderId).orElseThrow();
+        order.markSeparando();
+        order.markEnviando();
+        orderRepository.save(order);
+        envioGravado(orderId, "me-rastreio-sem-codigo");
+
+        rastreio("me-rastreio-sem-codigo", "posted");   // chega com tracking BR123
+        mockMvc.perform(post("/api/v1/webhooks/melhorenvio")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"event":"order.delivered","data":{"id":"me-rastreio-sem-codigo","status":"delivered","tracking":null}}
+                                """))
+                .andExpect(status().isOk());
+
+        assertThat(shippimentRepository.findByMeOrderId("me-rastreio-sem-codigo").orElseThrow().getTrackingCode())
+                .isEqualTo("BR123");
+    }
+
     // ----------------- helpers -----------------
 
     private void rastreio(String meOrderId, String statusMe) throws Exception {
         mockMvc.perform(post("/api/v1/webhooks/melhorenvio")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"shipment_id":"%s","status":"%s","tracking":"BR123"}
-                                """.formatted(meOrderId, statusMe)))
+                                {"event":"order.%s","data":{"id":"%s","status":"%s","tracking":"BR123"}}
+                                """.formatted(statusMe, meOrderId, statusMe)))
                 .andExpect(status().isOk());
     }
 

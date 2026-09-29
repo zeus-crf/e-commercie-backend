@@ -26,15 +26,18 @@ public class ShipmentTrackingService {
 
     @Transactional
     public void processar(MeTrackingEvent event) {
-        Shipment shipment = shipmentRepository.findByMeOrderId(event.shipmentId())
+        Shipment shipment = shipmentRepository.findByMeOrderId(event.meOrderId())
                 .orElse(null);
 
         if (shipment == null) {
-            log.warn("Tracking recebido para meOrderId desconhecido: {}", event.shipmentId());
+            log.warn("Tracking recebido para meOrderId desconhecido: {}", event.meOrderId());
             return;
         }
 
-        shipment.setTrackingCode(event.tracking());
+        if (event.tracking() != null) {
+            // o ME pode mandar eventos sem codigo (ate 1 dia util apos a postagem): nao apagar o que ja temos
+            shipment.setTrackingCode(event.tracking());
+        }
         shipment.setTrackingStatus(event.status());
 
         if ("posted".equals(event.status())) {
@@ -59,7 +62,7 @@ public class ShipmentTrackingService {
                 .shipment(shipment)
                 .status(event.status())
                 .trackingCode(event.tracking())
-                .occurredAt(event.createdAt() != null ? event.createdAt() : LocalDateTime.now())
+                .occurredAt(LocalDateTime.now())   // o corpo do ME nao traz a data do evento, so as de cada etapa
                 .build());
 
         log.info("Tracking processado - pedido={} status={} tracking={}", shipment.getOrder().getId(), event.status(), event.tracking());

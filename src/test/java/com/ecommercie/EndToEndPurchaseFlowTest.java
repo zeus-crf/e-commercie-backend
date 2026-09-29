@@ -190,8 +190,8 @@ public class EndToEndPurchaseFlowTest {
         mockMvc.perform(post("/api/v1/webhooks/melhorenvio")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"shipment_id":"%s","status":"delivered","tracking":"%s"}
-                                """.formatted(StubShippingProvider.ME_ORDER_PREFIX + orderId, StubShippingProvider.TRACKING_CODE)))
+                              {"event":"order.delivered","data":{"id":"%s","status":"delivered","tracking":"%s"}}
+                              """.formatted(StubShippingProvider.ME_ORDER_PREFIX + orderId, StubShippingProvider.TRACKING_CODE)))
                 .andExpect(status().isOk())
                 .andExpect(content().string(""));
     }
