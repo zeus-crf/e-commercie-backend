@@ -187,8 +187,12 @@ public class OrderService {
     }
 
     public void marcarEnviado(Order order) {
+       marcarEnviado(order, null);
+    }
+
+    public void marcarEnviado(Order order, String codigoRastreio) {
         order.markEnviando();
-        notificarCliente(order, OutboxTypes.EMAIL_PEDIDO_ENVIADO);
+        outboxService.registrar(OutboxTypes.EMAIL_PEDIDO_ENVIADO, new OutboxDispatcher.EnvioPayload(order.getId(), order.getUser().getEmail(), codigoRastreio));
     }
 
     public void marcarEntregue(Order order) {

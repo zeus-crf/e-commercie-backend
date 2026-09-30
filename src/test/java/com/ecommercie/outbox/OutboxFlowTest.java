@@ -86,6 +86,27 @@ class OutboxFlowTest {
     }
 
     @Test
+    void emailDeEnviado_levaOCodigoDeRastreio() {
+        registrarElegivel(OutboxTypes.EMAIL_PEDIDO_ENVIADO, new OutboxDispatcher.EnvioPayload("pedido-1", "cli@test.com", "BR123"));
+
+        outboxRelay.processOutbox();
+
+        verify(emailService).enviarConfirmacaoEnviado("pedido-1", "cli@test.com", "BR123");
+    }
+
+    @Test
+    void emailDeEnviado_eventoAntigoSemCodigo_aindaEEnviado() {
+        registrarElegivel(OutboxTypes.EMAIL_PEDIDO_ENVIADO, new OutboxDispatcher.EmailPayload("pedido-1", "cli@test.com"));
+
+        outboxRelay.processOutbox();
+
+        verify(emailService)
+                .enviarConfirmacaoEnviado("pedido-1", "cli@test.com", null);
+    }
+
+
+
+    @Test
     void relay_falhaNoEnvio_reagenda_naoPerde() {
         doThrow(new RuntimeException("SMTP fora do ar"))
                 .when(emailService).enviarConfirmacaoPedido(anyString(), anyString());
