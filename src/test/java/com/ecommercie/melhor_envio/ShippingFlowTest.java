@@ -21,6 +21,7 @@ import com.ecommercie.security.models.User;
 import com.ecommercie.security.repository.UserRepository;
 import com.ecommercie.support.DatabaseCleaner;
 import com.ecommercie.support.ExternalStubsConfiguration;
+import com.ecommercie.support.MelhorEnvioWebhookAssinatura;
 import com.ecommercie.support.StubShippingProvider;
 import com.jayway.jsonpath.JsonPath;
 import jakarta.servlet.http.Cookie;
@@ -375,25 +376,55 @@ class ShippingFlowTest {
         envioGravado(orderId, "me-rastreio-sem-codigo");
 
         rastreio("me-rastreio-sem-codigo", "posted");   // chega com tracking BR123
-        mockMvc.perform(post("/api/v1/webhooks/melhorenvio")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {"event":"order.delivered","data":{"id":"me-rastreio-sem-codigo","status":"delivered","tracking":null}}
-                                """))
-                .andExpect(status().isOk());
+        webhookAssinado("""
+                {"event":"order.delivered","data":{"id":"me-rastreio-sem-codigo","status":"delivered","tracking":null}}
+                """);
 
         assertThat(shippimentRepository.findByMeOrderId("me-rastreio-sem-codigo").orElseThrow().getTrackingCode())
                 .isEqualTo("BR123");
     }
 
+    @Test
+    void webhookSemAssinaturaOuComAssinaturaErrada_eRecusadoSemProcessar() throws Exception {
+        String orderId = pedidoPago();
+        Order order = orderRepository.findById(orderId).orElseThrow();
+        order.markSeparando();
+        order.markEnviando();
+        orderRepository.save(order);
+        envioGravado(orderId, "me-rastreio-assinatura");
+        String corpo = """
+                {"event":"order.delivered","data":{"id":"me-rastreio-assinatura","status":"delivered","tracking":"BR123"}}
+                """;
+
+        // Sem cabeçalho
+        mockMvc.perform(post("/api/v1/webhooks/melhorenvio")
+                .contentType(MediaType.APPLICATION_JSON).content(corpo))
+                .andExpect(status().isUnauthorized());
+
+        // assinatura de outro corpo (ex.: corpo adulterado)
+        mockMvc.perform(post("/api/v1/webhooks/melhorenvio")
+                .contentType(MediaType.APPLICATION_JSON).content(corpo)
+                .header("X-ME-Signature", MelhorEnvioWebhookAssinatura.assinar(corpo + " ")))
+                .andExpect(status().isUnauthorized());
+
+        assertThat(orderRepository.findById(orderId).orElseThrow().getStatus()).isEqualTo(StatusOrder.ENVIADO);
+        assertThat(shipmentTrackingEventRepository.findAll()).isEmpty();
+    }
+
     // ----------------- helpers -----------------
 
     private void rastreio(String meOrderId, String statusMe) throws Exception {
+        webhookAssinado("""
+                {"event":"order.%s","data":{"id":"%s","status":"%s","tracking":"BR123"}}
+                """.formatted(statusMe, meOrderId, statusMe));
+    }
+
+
+    private void webhookAssinado(String corpo) throws Exception {
         mockMvc.perform(post("/api/v1/webhooks/melhorenvio")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {"event":"order.%s","data":{"id":"%s","status":"%s","tracking":"BR123"}}
-                                """.formatted(statusMe, meOrderId, statusMe)))
+                        .header("X-ME-Signature", MelhorEnvioWebhookAssinatura.assinar(corpo))
+                        .content(corpo))
                 .andExpect(status().isOk());
     }
 

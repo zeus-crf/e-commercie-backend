@@ -45,6 +45,7 @@ services:
       SHIPPING_ORIGIN_CEP: ${SHIPPING_ORIGIN_CEP}
       ME_USER_AGENT: ${ME_USER_AGENT}
       ME_BASE_URL: ${ME_BASE_URL:-https://sandbox.melhorenvio.com.br}
+      ME_WEBHOOK_SECRET: ${ME_WEBHOOK_SECRET}
       # Fiscal — desligado por padrao
       FISCAL_ENABLED: ${FISCAL_ENABLED:-false}
       FISCAL_TIPO: ${FISCAL_TIPO:-DCE}

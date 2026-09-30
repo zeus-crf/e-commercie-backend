@@ -9,10 +9,7 @@ import com.ecommercie.pedido.repository.OrderRepository;
 import com.ecommercie.security.models.Papel;
 import com.ecommercie.security.models.User;
 import com.ecommercie.security.repository.UserRepository;
-import com.ecommercie.support.DatabaseCleaner;
-import com.ecommercie.support.ExternalStubsConfiguration;
-import com.ecommercie.support.StubPaymentGateway;
-import com.ecommercie.support.StubShippingProvider;
+import com.ecommercie.support.*;
 import com.jayway.jsonpath.JsonPath;
 import com.mercadopago.client.payment.PaymentClient;
 import com.mercadopago.resources.payment.Payment;
@@ -187,11 +184,13 @@ public class EndToEndPurchaseFlowTest {
     }
 
     private void dispararTrackingEntregue(String orderId) throws Exception {
+        String corpo = """
+                {"event":"order.delivered","data":{"id":"%s","status":"delivered","tracking":"%s"}}
+                """.formatted(StubShippingProvider.ME_ORDER_PREFIX + orderId, StubShippingProvider.TRACKING_CODE);
         mockMvc.perform(post("/api/v1/webhooks/melhorenvio")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                              {"event":"order.delivered","data":{"id":"%s","status":"delivered","tracking":"%s"}}
-                              """.formatted(StubShippingProvider.ME_ORDER_PREFIX + orderId, StubShippingProvider.TRACKING_CODE)))
+                        .header("X-ME-Signature", MelhorEnvioWebhookAssinatura.assinar(corpo))
+                        .content(corpo))
                 .andExpect(status().isOk())
                 .andExpect(content().string(""));
     }
@@ -215,6 +214,7 @@ public class EndToEndPurchaseFlowTest {
                     .andExpect(content().string(""));   // 200 puro, sem envelope ApiResponse
         }
     }
+
 
     private Cookie clienteCookie(String email) throws Exception {
         return mockMvc.perform(post("/api/v1/auth/register")

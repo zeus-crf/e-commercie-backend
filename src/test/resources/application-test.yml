@@ -40,3 +40,5 @@ melhorenvio:
   origin-cep: "01310100"
   user-agent: "ecommercie/1.0 test"
   base-url: https://sandbox.melhorenvio.com.br
+  # secret FALSO, so para teste: o MelhorEnvioWebhookAssinatura (support) assina com o mesmo valor
+  webhook-secret: segredo-webhook-de-teste

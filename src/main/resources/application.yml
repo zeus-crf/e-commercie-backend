@@ -74,6 +74,9 @@ melhorenvio:
   user-agent: ${ME_USER_AGENT:ecommercie/1.0 contato@ecommercie.local}
   base-url: ${ME_BASE_URL:https://sandbox.melhorenvio.com.br}
 
+  # secret do aplicativo do ME: assina o webhook (X-ME-Signature). SEM default: a app nao sobe sem ele
+  webhook-secret: ${ME_WEBHOOK_SECRET}
+
 features:
   fiscal:
     enabled: ${FISCAL_ENABLED:false}
