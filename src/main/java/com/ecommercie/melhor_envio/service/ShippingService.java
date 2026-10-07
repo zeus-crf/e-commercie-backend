@@ -88,10 +88,21 @@ public class ShippingService {
         if (order.getShippingServiceId() == null) {
             throw new IllegalStateException("Pedido não possui transportadora selecionada (shippingServiceId null). Use um pedido feito após a seleção de frete.");
         }
+
+
         // valida ANTES de chamar o ME: nada de comprar etiqueta para pedido que nao pode ser enviado
         if (order.getStatus() != StatusOrder.PAGO && order.getStatus() != StatusOrder.EM_SEPARACAO) {
             throw new IllegalStateException("Só é possível gerar etiqueta para pedido pago ou em separação (status atual: " + order.getStatus() + ")");
         }
+
+        boolean etiquetaPaga = shippimentRepository.findByOrderId(orderId)
+                .map(Shipment::getLabelGeneratedAt)
+                .isPresent();
+
+        if (etiquetaPaga) {
+            throw new IllegalStateException("A etiqueta deste pedido já foi paga. Gere e imprima pelo painel do Melhor Envio");
+        }
+
         if (order.getStatus() == StatusOrder.PAGO) {
             orderService.marcarSeparando(order);
         }
@@ -118,10 +129,10 @@ public class ShippingService {
     private Shipment concluir(String orderId) {
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new EntityNotFoundException("Pedido não encontrado"));
-        Shipment shipment = shippimentRepository.findByOrderId(orderId)
+
+        Shipment shipment = shippimentRepository.findByOrderId(order.getId())
                 .orElseThrow(() -> new IllegalStateException("Envio pendente não encontrado para o pedido " + orderId));
         shipment.setLabelGeneratedAt(LocalDateTime.now());
-        orderService.marcarEnviado(order);
         return shipment;
     }
 

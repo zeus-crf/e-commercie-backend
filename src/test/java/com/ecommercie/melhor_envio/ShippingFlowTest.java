@@ -79,22 +79,18 @@ class ShippingFlowTest {
     // ----------------- etiqueta -----------------
 
     @Test
-    void gerarEtiqueta_levaPagoAteEnviado_gravaEnvio_eAvisaCliente() throws Exception {
+    void gerarEtiqueta_pagaEtiqueta_pedidoSegueEmSeparacao_semAvisarCliente() throws Exception {
         String orderId = pedidoPago();
 
         mockMvc.perform(post("/api/v1/admin/orders/{id}/label", orderId).cookie(adminCookie()))
                 .andExpect(status().isOk());
 
-        assertThat(orderRepository.findById(orderId).orElseThrow().getStatus()).isEqualTo(StatusOrder.ENVIADO);
+        assertEtiquetaPagaAguardandoPostagem(orderId);
         assertThat(shippimentRepository.findAll()).singleElement().satisfies(envio -> {
             assertThat(envio.getMeOrderId()).isEqualTo(StubShippingProvider.ME_ORDER_PREFIX + orderId);
             assertThat(envio.getServiceId()).isEqualTo(2);
             assertThat(envio.getLabelGeneratedAt()).isNotNull();
         });
-        assertThat(outboxEventRepository.findAll())
-                .extracting(ev -> ev.getType())
-                .filteredOn(OutboxTypes.EMAIL_PEDIDO_ENVIADO::equals)
-                .hasSize(1);
 
         // o client recebeu um snapshot com os dados do pedido
         assertThat(shippingStub.carrinhos()).singleElement().satisfies(req -> {
@@ -165,10 +161,7 @@ class ShippingFlowTest {
         assertThat(shippingStub.carrinhos()).hasSize(2);
         assertThat(shippingStub.compras()).hasSize(1);
 
-        assertThat(orderRepository.findById(orderId).orElseThrow().getStatus()).isEqualTo(StatusOrder.ENVIADO);
-        assertThat(outboxEventRepository.findAll()).extracting(ev -> ev.getType())
-                .filteredOn(OutboxTypes.EMAIL_PEDIDO_ENVIADO::equals)
-                .hasSize(1);
+        assertEtiquetaPagaAguardandoPostagem(orderId);
 
 
     }
@@ -193,7 +186,7 @@ class ShippingFlowTest {
 
         assertThat(shippingStub.carrinhos()).isEmpty();
         assertThat(shippingStub.compras()).containsExactly("me-pendente-2");
-        assertThat(orderRepository.findById(orderId).orElseThrow().getStatus()).isEqualTo(StatusOrder.ENVIADO);
+        assertEtiquetaPagaAguardandoPostagem(orderId);
     }
 
     @Test
@@ -256,7 +249,23 @@ class ShippingFlowTest {
         mockMvc.perform(post("/api/v1/admin/orders/{id}/label", orderId).cookie(admin))
                 .andExpect(status().isOk());
 
-        assertThat(orderRepository.findById(orderId).orElseThrow().getStatus()).isEqualTo(StatusOrder.ENVIADO);
+        assertEtiquetaPagaAguardandoPostagem(orderId);
+        assertThat(shippimentRepository.findAll()).hasSize(1);
+    }
+
+    @Test
+    void gerarEtiqueta_etiquetaJaPaga_recusaSemChamarOMelhorEnvio() throws Exception {
+        String orderId = pedidoPago();
+        Cookie admin = adminCookie();
+
+        mockMvc.perform(post("/api/v1/admin/orders/{id}/label", orderId).cookie(admin))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(post("/api/v1/admin/orders/{id}/label", orderId).cookie(admin))
+                .andExpect(status().isUnprocessableEntity());
+
+        assertThat(shippingStub.carrinhos()).hasSize(1);
+        assertThat(shippingStub.compras()).hasSize(1);
         assertThat(shippimentRepository.findAll()).hasSize(1);
     }
 
@@ -323,10 +332,7 @@ class ShippingFlowTest {
 
         assertThat(shippingStub.consultas()).containsExactly(StubShippingProvider.ME_ORDER_PREFIX + orderId);
         assertThat(shippingStub.transacaoAtivaNasChamadas()).containsOnly(false);
-        assertThat(orderRepository.findById(orderId).orElseThrow().getStatus()).isEqualTo(StatusOrder.ENVIADO);
-        assertThat(outboxEventRepository.findAll()).extracting(ev -> ev.getType())
-                .filteredOn(OutboxTypes.EMAIL_PEDIDO_ENVIADO::equals)
-                .hasSize(1);
+        assertEtiquetaPagaAguardandoPostagem(orderId);
 
     }
 
@@ -417,6 +423,17 @@ class ShippingFlowTest {
         webhookAssinado("""
                 {"event":"order.%s","data":{"id":"%s","status":"%s","tracking":"BR123"}}
                 """.formatted(statusMe, meOrderId, statusMe));
+    }
+
+    private void assertEtiquetaPagaAguardandoPostagem(String orderId) {
+
+        assertThat(orderRepository.findById(orderId).orElseThrow().getStatus())
+                .isEqualTo(StatusOrder.EM_SEPARACAO);
+        assertThat(shippimentRepository.findByOrderId(orderId).orElseThrow().getLabelGeneratedAt()).isNotNull();
+
+        assertThat(outboxEventRepository.findAll())
+                .extracting(ev -> ev.getType())
+                .doesNotContain(OutboxTypes.EMAIL_PEDIDO_ENVIADO);
     }
 
 

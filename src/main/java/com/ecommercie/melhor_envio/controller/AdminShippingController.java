@@ -22,10 +22,10 @@ public class AdminShippingController {
 
     private final ShippingService shippingService;
 
-    @Operation(summary = "Gera a etiqueta no Melhor Envio e marca o pedido como enviado")
+    @Operation(summary = "Compra a etiqueta no Melhor Envio (o pedido vira ENVIADO quando o ME avisar a postagem)")
     @PostMapping("/{id}/label")
     public ResponseEntity<ApiResponse<Void>> gerarEtiqueta(@PathVariable String id) {
         shippingService.gerarEtiqueta(id);
-        return ResponseEntity.ok(ApiResponse.ok("Etiqueta gerada e pedido marcado como enviado", null));
+        return ResponseEntity.ok(ApiResponse.ok("Etiqueta paga no Melhor Envio. Gere e imprima pelo painel do ME; o pedido vira enviado na postagem", null));
     }
 }
