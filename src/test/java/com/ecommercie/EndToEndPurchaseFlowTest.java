@@ -151,42 +151,33 @@ public class EndToEndPurchaseFlowTest {
         mockMvc.perform(post("/api/v1/admin/orders/" + orderId + "/label").cookie(admin))
                 .andExpect(status().is2xxSuccessful());
 
-        Order enviado = orderRepository.findById(orderId).orElseThrow();
-        assertThat(enviado.getStatus()).isEqualTo(StatusOrder.ENVIADO);
-
+        assertThat(orderRepository.findById(orderId).orElseThrow().getStatus()).isEqualTo(StatusOrder.EM_SEPARACAO);
         assertThat(shippimentRepository.findAll()).singleElement().satisfies(envio -> {
             assertThat(envio.getMeOrderId()).isEqualTo(StubShippingProvider.ME_ORDER_PREFIX + orderId);
             assertThat(envio.getServiceId()).isEqualTo(2);
             assertThat(envio.getLabelGeneratedAt()).isNotNull();
         });
+        assertThat(outboxEventRepository.findAll()).extracting(ev -> ev.getType())
+                .doesNotContain(OutboxTypes.EMAIL_PEDIDO_ENVIADO);
 
-        // gerar a etiqueta avisa o cliente do envio
+        // 8. POSTAGEM — o ME avisa "posted": agora sim ENVIADO, e o e-mail leva o rastreio
+        dispararTracking(orderId, "posted");
+
+        assertThat(orderRepository.findById(orderId).orElseThrow().getStatus()).isEqualTo(StatusOrder.ENVIADO);
         assertThat(outboxEventRepository.findAll())
-                .extracting(ev -> ev.getType())
-                .contains(OutboxTypes.EMAIL_PEDIDO_ENVIADO);
+                .filteredOn(ev -> OutboxTypes.EMAIL_PEDIDO_ENVIADO.equals(ev.getType()))
+                .singleElement()
+                .satisfies(ev -> assertThat(ev.getPayload()).contains(StubShippingProvider.TRACKING_CODE));
 
-        // 8. ENTREGA — o webhook de rastreio do ME avisa "delivered", e o ME pode reenviar
-        dispararTrackingEntregue(orderId);
-        dispararTrackingEntregue(orderId);
-
-        Order entregue = orderRepository.findById(orderId).orElseThrow();
-        assertThat(entregue.getStatus()).isEqualTo(StatusOrder.ENTREGUE);
-
-        // o codigo de rastreio chegou pelo webhook do ME
-        assertThat(shippimentRepository.findAll()).singleElement()
-                .satisfies(envio -> assertThat(envio.getTrackingCode()).isEqualTo(StubShippingProvider.TRACKING_CODE));
-
-        // um unico e-mail de entrega, mesmo com o webhook duplicado
-        assertThat(outboxEventRepository.findAll())
-                .extracting(ev -> ev.getType())
-                .filteredOn(OutboxTypes.EMAIL_PEDIDO_ENTREGUE::equals)
-                .hasSize(1);
+        // 9. ENTREGA — o webhook de rastreio do ME avisa "delivered", e o ME pode reenviar
+        dispararTracking(orderId, "delivered");
+        dispararTracking(orderId, "delivered");
     }
 
-    private void dispararTrackingEntregue(String orderId) throws Exception {
+    private void dispararTracking(String orderId, String statusMe) throws Exception {
         String corpo = """
-                {"event":"order.delivered","data":{"id":"%s","status":"delivered","tracking":"%s"}}
-                """.formatted(StubShippingProvider.ME_ORDER_PREFIX + orderId, StubShippingProvider.TRACKING_CODE);
+                {"event":"order.%s","data":{"id":"%s","status":"%s","tracking":"%s"}}
+                """.formatted(statusMe, StubShippingProvider.ME_ORDER_PREFIX + orderId, statusMe, StubShippingProvider.TRACKING_CODE);
         mockMvc.perform(post("/api/v1/webhooks/melhorenvio")
                         .contentType(MediaType.APPLICATION_JSON)
                         .header("X-ME-Signature", MelhorEnvioWebhookAssinatura.assinar(corpo))

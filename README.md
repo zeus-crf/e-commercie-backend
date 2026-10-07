@@ -267,6 +267,11 @@ O módulo fiscal nasce **desligado** (`FISCAL_ENABLED=false`) e a loja funciona 
   (`OrderService.entregar` e `ShipmentTrackingService`). O ideal é concentrar cada transição num
   único método do `OrderService`, que já registra o e-mail, chamado pelos dois caminhos — e o
   client só falar com a API do Melhor Envio.
+- **Pedido aguardando postagem:** pagar a etiqueta não marca o pedido como enviado. Ele fica EM_SEPARACAO até
+  o Melhor Envio avisar a postagem (webhook `posted`), e aí vira ENVIADO e o cliente recebe o e-mail com o
+  código de rastreio. Como o app ainda não gera a etiqueta, o dono precisa gerá-la e imprimi-la no painel do ME
+  para o `posted` chegar. Se o webhook não vier, o admin pode marcar o envio à mão com
+  `PATCH /api/v1/admin/orders/{id}/enviar`.
 
 ---
 
