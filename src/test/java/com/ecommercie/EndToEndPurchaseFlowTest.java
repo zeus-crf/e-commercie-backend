@@ -9,10 +9,7 @@ import com.ecommercie.pedido.repository.OrderRepository;
 import com.ecommercie.security.models.Papel;
 import com.ecommercie.security.models.User;
 import com.ecommercie.security.repository.UserRepository;
-import com.ecommercie.support.DatabaseCleaner;
-import com.ecommercie.support.ExternalStubsConfiguration;
-import com.ecommercie.support.StubPaymentGateway;
-import com.ecommercie.support.StubShippingProvider;
+import com.ecommercie.support.*;
 import com.jayway.jsonpath.JsonPath;
 import com.mercadopago.client.payment.PaymentClient;
 import com.mercadopago.resources.payment.Payment;
@@ -154,13 +151,39 @@ public class EndToEndPurchaseFlowTest {
         mockMvc.perform(post("/api/v1/admin/orders/" + orderId + "/label").cookie(admin))
                 .andExpect(status().is2xxSuccessful());
 
-        Order enviado = orderRepository.findById(orderId).orElseThrow();
-        assertThat(enviado.getStatus()).isEqualTo(StatusOrder.ENVIADO);
-
+        assertThat(orderRepository.findById(orderId).orElseThrow().getStatus()).isEqualTo(StatusOrder.EM_SEPARACAO);
         assertThat(shippimentRepository.findAll()).singleElement().satisfies(envio -> {
-            assertThat(envio.getTrackingCode()).isEqualTo(StubShippingProvider.TRACKING_CODE);
+            assertThat(envio.getMeOrderId()).isEqualTo(StubShippingProvider.ME_ORDER_PREFIX + orderId);
             assertThat(envio.getServiceId()).isEqualTo(2);
+            assertThat(envio.getLabelGeneratedAt()).isNotNull();
         });
+        assertThat(outboxEventRepository.findAll()).extracting(ev -> ev.getType())
+                .doesNotContain(OutboxTypes.EMAIL_PEDIDO_ENVIADO);
+
+        // 8. POSTAGEM — o ME avisa "posted": agora sim ENVIADO, e o e-mail leva o rastreio
+        dispararTracking(orderId, "posted");
+
+        assertThat(orderRepository.findById(orderId).orElseThrow().getStatus()).isEqualTo(StatusOrder.ENVIADO);
+        assertThat(outboxEventRepository.findAll())
+                .filteredOn(ev -> OutboxTypes.EMAIL_PEDIDO_ENVIADO.equals(ev.getType()))
+                .singleElement()
+                .satisfies(ev -> assertThat(ev.getPayload()).contains(StubShippingProvider.TRACKING_CODE));
+
+        // 9. ENTREGA — o webhook de rastreio do ME avisa "delivered", e o ME pode reenviar
+        dispararTracking(orderId, "delivered");
+        dispararTracking(orderId, "delivered");
+    }
+
+    private void dispararTracking(String orderId, String statusMe) throws Exception {
+        String corpo = """
+                {"event":"order.%s","data":{"id":"%s","status":"%s","tracking":"%s"}}
+                """.formatted(statusMe, StubShippingProvider.ME_ORDER_PREFIX + orderId, statusMe, StubShippingProvider.TRACKING_CODE);
+        mockMvc.perform(post("/api/v1/webhooks/melhorenvio")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("X-ME-Signature", MelhorEnvioWebhookAssinatura.assinar(corpo))
+                        .content(corpo))
+                .andExpect(status().isOk())
+                .andExpect(content().string(""));
     }
 
     // ----------------- helpers -----------------
@@ -182,6 +205,7 @@ public class EndToEndPurchaseFlowTest {
                     .andExpect(content().string(""));   // 200 puro, sem envelope ApiResponse
         }
     }
+
 
     private Cookie clienteCookie(String email) throws Exception {
         return mockMvc.perform(post("/api/v1/auth/register")

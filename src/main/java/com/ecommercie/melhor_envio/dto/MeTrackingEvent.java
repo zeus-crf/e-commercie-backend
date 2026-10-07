@@ -1,12 +1,23 @@
 package com.ecommercie.melhor_envio.dto;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
+/**
+ * Corpo do webhook de etiqueta do Melhor Envio:
+ * {"event":"order.posted","data":{"id":"...","status":"posted","tracking":"...", ...}}
+ * Doc: https://docs.melhorenvio.com.br/docs/webhooks — campos nao usados sao ignorados.
+ */
+public record MeTrackingEvent(String event, Data data) {
 
-import java.time.LocalDateTime;
+    public record Data(String id, String status, String tracking){}
 
-public record MeTrackingEvent(
-        @JsonProperty("shipment_id") String shipmentId,
-        String status,
-        String tracking,
-        @JsonProperty("created_at") LocalDateTime createdAt
-) {}
+    public String meOrderId() {
+        return data == null ? null : data().id();
+    }
+
+    public String status() {
+        return data == null ? null : data.status();
+    }
+
+    public String tracking() {
+        return data == null ? null : data.tracking();
+    }
+}

@@ -26,8 +26,8 @@ public class OutboxDispatcher {
             }
 
             case OutboxTypes.EMAIL_PEDIDO_ENVIADO -> {
-                var p = objectMapper.readValue(event.getPayload(), EmailPayload.class);
-                emailService.enviarConfirmacaoEnviado(p.orderId(), p.email());
+                var p = objectMapper.readValue(event.getPayload(), EnvioPayload.class);
+                emailService.enviarConfirmacaoEnviado(p.orderId(), p.email(), p.codigoRastreio());
             }
 
             case OutboxTypes.EMAIL_PEDIDO_CANCELADO -> {
@@ -60,4 +60,7 @@ public class OutboxDispatcher {
     }
 
     public record EmailPayload(String orderId, String email){}
+
+    /** E-mail de "pedido enviado": codigoRastreio vem da postagem no ME (nulo se o admin marcou na mao). */
+    public record EnvioPayload(String orderId, String email, String codigoRastreio){}
 }

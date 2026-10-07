@@ -13,6 +13,7 @@ import com.ecommercie.pedido.repository.OrderRepository;
 import com.ecommercie.security.repository.RefreshTokenRepository;
 import com.ecommercie.security.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Component;
 
 /**
@@ -41,6 +42,7 @@ public class DatabaseCleaner {
     private final CategoryRepository categoryRepository;
     private final RefreshTokenRepository refreshTokenRepository;
     private final UserRepository userRepository;
+    private final ObjectProvider<StubShippingProvider> shippingStub;
 
     /** Apaga tudo, das folhas para as raizes. */
     public void limparTudo() {
@@ -56,5 +58,8 @@ public class DatabaseCleaner {
         categoryRepository.deleteAll();
         refreshTokenRepository.deleteAll();           // -> usuarios
         userRepository.deleteAll();
+
+        // o stub do Melhor Envio e singleton do contexto de teste: zera chamadas e flags de falha
+        shippingStub.ifAvailable(StubShippingProvider::reset);
     }
 }

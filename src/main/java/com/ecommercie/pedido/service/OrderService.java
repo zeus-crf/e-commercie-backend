@@ -3,6 +3,9 @@ package com.ecommercie.pedido.service;
 import com.ecommercie.carrinho.model.CartItem;
 import com.ecommercie.carrinho.repository.CartRepository;
 import com.ecommercie.estoque.service.InventoryService;
+import com.ecommercie.outbox.OutboxTypes;
+import com.ecommercie.outbox.dispatcher.OutboxDispatcher;
+import com.ecommercie.outbox.service.OutboxService;
 import com.ecommercie.pedido.dtos.CheckoutRequest;
 import com.ecommercie.pedido.dtos.OrderResponse;
 import com.ecommercie.pedido.models.Address;
@@ -10,7 +13,9 @@ import com.ecommercie.pedido.models.Order;
 import com.ecommercie.pedido.models.OrderItem;
 import com.ecommercie.pedido.models.StatusOrder;
 import com.ecommercie.pedido.repository.OrderRepository;
+import com.ecommercie.security.dto.ClienteResponse;
 import com.ecommercie.security.models.User;
+import com.ecommercie.security.repository.UserRepository;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -30,6 +35,8 @@ public class OrderService {
     private final OrderRepository orderRepository;
     private final InventoryService inventoryService;
     private final CartRepository cartRepository;
+    private final UserRepository userRepository;
+    private final OutboxService outboxService;
 
     @Transactional
     public OrderResponse checkout(User user, CheckoutRequest request) {
@@ -92,6 +99,13 @@ public class OrderService {
                 .map(OrderResponse::from);
     }
 
+    @Transactional(readOnly = true)
+    public Page<ClienteResponse> buscarCliente(String q, Pageable pageable) {
+        String termo = (q == null || q.isBlank() ? null : q.trim());
+        return userRepository.buscarCliente(termo, pageable)
+                .map(ClienteResponse::from);
+    }
+
 
     @Transactional(readOnly = true)
     public OrderResponse meuPedido(User user, String orderId) {
@@ -123,7 +137,7 @@ public class OrderService {
         var order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new EntityNotFoundException("Esse pedido não existe"));
 
-        order.markSeparando();
+        marcarSeparando(order);
         return OrderResponse.from(order);
     }
 
@@ -132,7 +146,7 @@ public class OrderService {
         var order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new EntityNotFoundException("Pedido não encontrado"));
 
-        order.markEnviando();
+        marcarEnviado(order);
         return OrderResponse.from(order);
     }
 
@@ -141,7 +155,7 @@ public class OrderService {
         var order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new EntityNotFoundException("Pedido não encontrado"));
 
-        order.markEntregue();
+        marcarEntregue(order);
         return OrderResponse.from(order);
     }
 
@@ -162,8 +176,32 @@ public class OrderService {
         vencidos.forEach(this::cancelarEDevolver);
     }
 
+    // ---------- transições compartilhadas ----------
+    // Único lugar que muda o status para EM_SEPARACAO / ENVIADO / ENTREGUE. Chamados pelos
+    // endpoints de admin e pelo módulo de frete (etiqueta e rastreio), sempre DENTRO da
+    // transação de quem chama. Sem @Transactional de propósito: se a guarda do Order lançasse
+    // através do proxy, a transação inteira do chamador seria marcada como rollback-only.
+
+    public void marcarSeparando(Order order) {
+        order.markSeparando();
+    }
+
+    public void marcarEnviado(Order order) {
+       marcarEnviado(order, null);
+    }
+
+    public void marcarEnviado(Order order, String codigoRastreio) {
+        order.markEnviando();
+        outboxService.registrar(OutboxTypes.EMAIL_PEDIDO_ENVIADO, new OutboxDispatcher.EnvioPayload(order.getId(), order.getUser().getEmail(), codigoRastreio));
+    }
+
+    public void marcarEntregue(Order order) {
+        order.markEntregue();
+        notificarCliente(order, OutboxTypes.EMAIL_PEDIDO_ENTREGUE);
+    }
+
     // cancela o pedido e devolve a reserva de estoque de cada item.
-    // reusado pelo cancelar (cliente) e pela expiração (job).
+    // reusado pelo cancelar (cliente) e pela expiração (job) — os dois avisam o cliente.
     private void cancelarEDevolver(Order order) {
         order.markCancelado();
         for (OrderItem item : order.getItens()) {
@@ -171,5 +209,11 @@ public class OrderService {
                 inventoryService.devolverReserva(item.getProduct().getId(), item.getQuantidade());
             }
         }
+        notificarCliente(order, OutboxTypes.EMAIL_PEDIDO_CANCELADO);
+    }
+
+    // grava o e-mail no outbox na mesma transação da mudança de status; o relay envia depois
+    private void notificarCliente(Order order, String tipo) {
+        outboxService.registrar(tipo, new OutboxDispatcher.EmailPayload(order.getId(), order.getUser().getEmail()));
     }
 }

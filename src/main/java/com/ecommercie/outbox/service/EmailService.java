@@ -26,13 +26,20 @@ public class EmailService {
 
     }
 
-    public void enviarConfirmacaoEnviado(String orderId, String destino) {
-        SimpleMailMessage message = new SimpleMailMessage();
-        message.setFrom(from);
-        message.setTo(destino);
-        message.setSubject("Pedido enviado com sucesso! Pedido - " + orderId);
-        message.setText("Seu pedido foi enviado com sucesso para " + destino);
-        mailSender.send(message);
+    public void enviarConfirmacaoEnviado(String orderId, String destino, String codigoRastreio) throws IllegalArgumentException {
+
+            SimpleMailMessage message = new SimpleMailMessage();
+            message.setFrom(from);
+            message.setTo(destino);
+            message.setSubject("Pedido enviado com sucesso! Pedido - " + orderId);
+            message.setText(
+                    codigoRastreio == null
+                            ? "Seu pedido foi postado e está a caminho. O código de rastreio chaga em breve."
+                            : "Seu pedido foi postado e está a caminho. Código de rastreio: " + codigoRastreio
+            );
+            mailSender.send(message);
+
+
     }
 
     public void enviarConfirmacaoCancelado(String orderId, String destino) {

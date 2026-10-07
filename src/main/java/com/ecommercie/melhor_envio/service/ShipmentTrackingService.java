@@ -5,6 +5,9 @@ import com.ecommercie.melhor_envio.models.Shipment;
 import com.ecommercie.melhor_envio.models.ShipmentTrackingEvent;
 import com.ecommercie.melhor_envio.repository.ShipmentTrackingEventRepository;
 import com.ecommercie.melhor_envio.repository.ShippimentRepository;
+import com.ecommercie.pedido.models.Order;
+import com.ecommercie.pedido.models.StatusOrder;
+import com.ecommercie.pedido.service.OrderService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -19,28 +22,47 @@ public class ShipmentTrackingService {
 
     private final ShippimentRepository shipmentRepository;
     private final ShipmentTrackingEventRepository trackingEventRepository;
+    private final OrderService orderService;
 
     @Transactional
     public void processar(MeTrackingEvent event) {
-        Shipment shipment = shipmentRepository.findByMeOrderId(event.shipmentId())
+        Shipment shipment = shipmentRepository.findByMeOrderId(event.meOrderId())
                 .orElse(null);
 
         if (shipment == null) {
-            log.warn("Tracking recebido para meOrderId desconhecido: {}", event.shipmentId());
+            log.warn("Tracking recebido para meOrderId desconhecido: {}", event.meOrderId());
             return;
         }
 
-        shipment.setTrackingCode(event.tracking());
+        if (event.tracking() != null) {
+            // o ME pode mandar eventos sem codigo (ate 1 dia util apos a postagem): nao apagar o que ja temos
+            shipment.setTrackingCode(event.tracking());
+        }
         shipment.setTrackingStatus(event.status());
 
         if ("posted".equals(event.status())) {
             shipment.setPostedAt(LocalDateTime.now());
+            Order order = shipment.getOrder();
+            if (order.getStatus() == StatusOrder.EM_SEPARACAO) {
+                orderService.marcarEnviado(order, shipment.getTrackingCode());
+            } else {
+                log.info("Tracking 'posted' sem transição para pedido {} em {}", order.getId(), order.getStatus());
+            }
         } else if ("delivered".equals(event.status())) {
             shipment.setDeliveredAt(LocalDateTime.now());
-            try {
-                shipment.getOrder().markEntregue();
-            } catch (IllegalArgumentException ex) {
-                log.warn("Não foi possível marcar pedido {} como entregue: {}", shipment.getOrder().getId(), ex.getMessage());
+            Order order = shipment.getOrder();
+            if (order.getStatus() == StatusOrder.EM_SEPARACAO) {
+                orderService.marcarEnviado(order, shipment.getTrackingCode());
+            }
+            if (order.getStatus() == StatusOrder.ENVIADO) {
+                orderService.marcarEntregue(order);
+            }
+            else if (order.getStatus() == StatusOrder.ENTREGUE) {
+                // "delivered" repetido: o ME reenvia o webhook — nada a fazer
+                log.info("Tracking 'delivered' repetido para pedido {} (já entregue)", order.getId());
+            } else {
+                // pedido fora de ENVIADO (ex.: em separação ou em devolução): nao transiciona nem avisa
+                log.warn("Tracking 'delivered' ignorado para pedido {} em {}", order.getId(), order.getStatus());
             }
         }
 
@@ -50,7 +72,7 @@ public class ShipmentTrackingService {
                 .shipment(shipment)
                 .status(event.status())
                 .trackingCode(event.tracking())
-                .occurredAt(event.createdAt() != null ? event.createdAt() : LocalDateTime.now())
+                .occurredAt(LocalDateTime.now())   // o corpo do ME nao traz a data do evento, so as de cada etapa
                 .build());
 
         log.info("Tracking processado - pedido={} status={} tracking={}", shipment.getOrder().getId(), event.status(), event.tracking());

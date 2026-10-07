@@ -47,4 +47,8 @@ public class Shipment extends BaseEntity {
 
     @Column(name = "delivered_at")
     private LocalDateTime deliveredAt;
+
+    // quando uma requisicao reservou a compra desta etiqueta no ME (bloqueia clique duplo)
+    @Column(name = "checkout_iniciado_em")
+    private LocalDateTime checkoutIniciadoEm;
 }
