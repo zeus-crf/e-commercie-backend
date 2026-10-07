@@ -276,7 +276,6 @@ class ShippingFlowTest {
         String orderId = pedidoPago();
         Order order = orderRepository.findById(orderId).orElseThrow();
         order.markSeparando();
-        order.markEnviando();
         orderRepository.save(order);
         envioGravado(orderId, "me-rastreio-1");
 
@@ -292,25 +291,38 @@ class ShippingFlowTest {
     }
 
     @Test
-    void rastreioEntregue_pedidoAindaNaoEnviado_naoMudaStatusNemAvisa() throws Exception {
+    void rastreioEntregueSemPostado_marcaEnviadoEEntregue() throws Exception {
         String orderId = pedidoPago();
         Order order = orderRepository.findById(orderId).orElseThrow();
         order.markSeparando();
         orderRepository.save(order);
         envioGravado(orderId, "me-rastreio-2");
 
-        rastreio("me-rastreio-2", "delivered");
+        rastreio("me-rastreio-2", "delivered");   // o "posted" se perdeu (o ME desiste depois de 5 tentativas)
 
-        assertThat(orderRepository.findById(orderId).orElseThrow().getStatus()).isEqualTo(StatusOrder.EM_SEPARACAO);
-        assertThat(outboxEventRepository.findAll())
-                .extracting(ev -> ev.getType())
-                .doesNotContain(OutboxTypes.EMAIL_PEDIDO_ENTREGUE);
-        assertThat(shipmentTrackingEventRepository.findAll()).hasSize(1);
-        Shipment shipment = shippimentRepository.findByMeOrderId("me-rastreio-2").orElseThrow();
-        assertThat(shipment.getTrackingStatus()).isEqualTo("delivered");
-        assertThat(shipment.getDeliveredAt()).isNotNull();
+        assertThat(orderRepository.findById(orderId).orElseThrow().getStatus()).isEqualTo(StatusOrder.ENTREGUE);
+        assertThat(outboxEventRepository.findAll()).extracting(ev -> ev.getType())
+                .containsExactlyInAnyOrder(OutboxTypes.EMAIL_PEDIDO_ENVIADO, OutboxTypes.EMAIL_PEDIDO_ENTREGUE);
     }
 
+    @Test
+    void rastreioDePedidoEmDevolucao_naoMudaStatusNemAvisa() throws Exception {
+        String orderId = pedidoPago();
+        Order order = orderRepository.findById(orderId).orElseThrow();
+        order.markSeparando();
+        order.markDevolucaoSolicitada();
+        orderRepository.save(order);
+        envioGravado(orderId, "me-devolucao");
+
+        rastreio("me-devolucao", "posted");
+        rastreio("me-devolucao", "delivered");
+
+        assertThat(orderRepository.findById(orderId).orElseThrow().getStatus()).isEqualTo(StatusOrder.DEVOLUCAO_SOLICITADA);
+        assertThat(outboxEventRepository.findAll()).extracting(ev -> ev.getType())
+                .doesNotContain(OutboxTypes.EMAIL_PEDIDO_ENVIADO, OutboxTypes.EMAIL_PEDIDO_ENTREGUE);
+        // o webhook nao fez rollback: os dois eventos de rastreio ficaram gravados
+        assertThat(shipmentTrackingEventRepository.findAll()).hasSize(2);
+    }
 
     @Test
     void meCobrouMasARespostaSePerdeu_retryConfereNoMe_eConcluiSemPagarDeNovo() throws Exception {
@@ -415,6 +427,26 @@ class ShippingFlowTest {
 
         assertThat(orderRepository.findById(orderId).orElseThrow().getStatus()).isEqualTo(StatusOrder.ENVIADO);
         assertThat(shipmentTrackingEventRepository.findAll()).isEmpty();
+    }
+
+    @Test
+    void rastreioPostado_marcaEnviado_eAvisaComCodigoDeRastreio() throws Exception {
+
+        String orderId = pedidoPago();
+        Order order = orderRepository.findById(orderId).orElseThrow();
+
+        order.markSeparando();
+        orderRepository.save(order);
+
+        envioGravado(orderId, "me-postado");
+
+        rastreio("me-postado", "posted");
+        rastreio("me-postado", "posted");
+
+        assertThat(orderRepository.findById(orderId).orElseThrow().getStatus()).isEqualTo(StatusOrder.ENVIADO);
+        assertThat(outboxEventRepository.findAll()).filteredOn(ev -> OutboxTypes.EMAIL_PEDIDO_ENVIADO.equals(ev.getType()))
+                .singleElement()
+                .satisfies(ev -> assertThat(ev.getPayload()).contains("BR123"));
     }
 
     // ----------------- helpers -----------------

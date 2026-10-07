@@ -42,12 +42,22 @@ public class ShipmentTrackingService {
 
         if ("posted".equals(event.status())) {
             shipment.setPostedAt(LocalDateTime.now());
+            Order order = shipment.getOrder();
+            if (order.getStatus() == StatusOrder.EM_SEPARACAO) {
+                orderService.marcarEnviado(order, shipment.getTrackingCode());
+            } else {
+                log.info("Tracking 'posted' sem transição para pedido {} em {}", order.getId(), order.getStatus());
+            }
         } else if ("delivered".equals(event.status())) {
             shipment.setDeliveredAt(LocalDateTime.now());
             Order order = shipment.getOrder();
+            if (order.getStatus() == StatusOrder.EM_SEPARACAO) {
+                orderService.marcarEnviado(order, shipment.getTrackingCode());
+            }
             if (order.getStatus() == StatusOrder.ENVIADO) {
                 orderService.marcarEntregue(order);
-            } else if (order.getStatus() == StatusOrder.ENTREGUE) {
+            }
+            else if (order.getStatus() == StatusOrder.ENTREGUE) {
                 // "delivered" repetido: o ME reenvia o webhook — nada a fazer
                 log.info("Tracking 'delivered' repetido para pedido {} (já entregue)", order.getId());
             } else {
