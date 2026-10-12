@@ -8,6 +8,7 @@ import com.ecommercie.melhor_envio.models.Shipment;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.MediaType;
@@ -33,17 +34,22 @@ public class MelhorEnvioClient implements ShippingProvider {
     private final RestClient restClient;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
+    @Autowired
     public MelhorEnvioClient(
             @Value("${melhorenvio.base-url}") String baseUrl,
             @Value("${melhorenvio.token}") String token,
             @Value("${melhorenvio.user-agent}") String userAgent
     ) {
-        this.restClient = RestClient.builder()
+        this(RestClient.builder()
                 .baseUrl(baseUrl)
                 .defaultHeader("Authorization", token)
                 .defaultHeader("User-Agent", userAgent)
-                .defaultHeader("Accept", "application/json")
-                .build();
+                .defaultHeader("Accept", "application/json"));
+    }
+
+    // usado no teste unitario, com o MockRestServiceServer ligado ao builder
+    MelhorEnvioClient(RestClient.Builder builder) {
+        this.restClient = builder.build();
     }
 
     public static SituacaoEtiqueta situacaoDo(MeOrderResponse item) {
@@ -157,24 +163,33 @@ public class MelhorEnvioClient implements ShippingProvider {
                 .toBodilessEntity();
     }
 
+    /**
+     * Formato real (sandbox, 2026-10-12), diferente do exemplo da doc:
+     *   200 {"generate_key": "...", "<id>": {"message": "Envio encaminhado para geração", "status": true}}
+     *   204 sem corpo quando a geração deste item já tinha sido pedida (retry)
+     * A geração é assíncrona: logo depois, a consulta ainda mostra generated_at nulo.
+     */
     @Override
     public void gerarEtiqueta(String meOrderId) {
-        Map<String, MeGenerateResult> resposta;
+        Map<String, Object> resposta;
         try {
             resposta = restClient.post()
                     .uri("/api/v2/me/shipment/generate")
                     .contentType(MediaType.APPLICATION_JSON)
                     .body(new MeCheckoutRequest(List.of(meOrderId)))   // mesmo corpo do checkout: {"orders": [...]}
                     .retrieve()
-                    .body(new ParameterizedTypeReference<>() {});
+                    .body(new ParameterizedTypeReference<Map<String, Object>>() {});
         } catch (HttpClientErrorException e) {
             throw new GeracaoRecusadaException(e.getResponseBodyAsString());
         }
-        MeGenerateResult resultado = resposta == null ? null : resposta.get(meOrderId);
-        if (resultado == null || !resultado.status()) {
-            throw new GeracaoRecusadaException(resultado == null
-                    ? "o Melhor Envio não devolveu o resultado da etiqueta " + meOrderId
-                    : resultado.message());
+        if (resposta == null) {
+            return;   // 204: geração já pedida antes
+        }
+        if (!(resposta.get(meOrderId) instanceof Map<?, ?> resultado)) {
+            throw new GeracaoRecusadaException("o Melhor Envio não devolveu o resultado da etiqueta " + meOrderId);
+        }
+        if (!Boolean.TRUE.equals(resultado.get("status"))) {
+            throw new GeracaoRecusadaException(String.valueOf(resultado.get("message")));
         }
     }
 
