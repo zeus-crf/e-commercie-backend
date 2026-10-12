@@ -155,7 +155,7 @@ public class EndToEndPurchaseFlowTest {
         assertThat(shippimentRepository.findAll()).singleElement().satisfies(envio -> {
             assertThat(envio.getMeOrderId()).isEqualTo(StubShippingProvider.ME_ORDER_PREFIX + orderId);
             assertThat(envio.getServiceId()).isEqualTo(2);
-            assertThat(envio.getLabelGeneratedAt()).isNotNull();
+            assertThat(envio.getEtiquetaPagaEm()).isNotNull();
         });
         assertThat(outboxEventRepository.findAll()).extracting(ev -> ev.getType())
                 .doesNotContain(OutboxTypes.EMAIL_PEDIDO_ENVIADO);

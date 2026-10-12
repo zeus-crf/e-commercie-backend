@@ -89,7 +89,7 @@ class ShippingFlowTest {
         assertThat(shippimentRepository.findAll()).singleElement().satisfies(envio -> {
             assertThat(envio.getMeOrderId()).isEqualTo(StubShippingProvider.ME_ORDER_PREFIX + orderId);
             assertThat(envio.getServiceId()).isEqualTo(2);
-            assertThat(envio.getLabelGeneratedAt()).isNotNull();
+            assertThat(envio.getEtiquetaPagaEm()).isNotNull();
         });
 
         // o client recebeu um snapshot com os dados do pedido
@@ -218,7 +218,7 @@ class ShippingFlowTest {
                 .andExpect(status().isConflict());
 
         assertThat(shippimentRepository.findAll()).singleElement().satisfies(envio -> {
-            assertThat(envio.getLabelGeneratedAt()).isNull();
+            assertThat(envio.getEtiquetaPagaEm()).isNull();
             assertThat(envio.getCheckoutIniciadoEm()).isNotNull();
         });
 
@@ -360,7 +360,7 @@ class ShippingFlowTest {
         assertThat(shippingStub.compras()).containsExactly(StubShippingProvider.ME_ORDER_PREFIX + orderId);
         assertThat(shippimentRepository.findAll()).singleElement().satisfies(envio -> {
             assertThat(envio.getMeOrderId()).isEqualTo(StubShippingProvider.ME_ORDER_PREFIX + orderId);
-            assertThat(envio.getLabelGeneratedAt()).isNotNull();
+            assertThat(envio.getEtiquetaPagaEm()).isNotNull();
         });
     }
 
@@ -461,7 +461,7 @@ class ShippingFlowTest {
 
         assertThat(orderRepository.findById(orderId).orElseThrow().getStatus())
                 .isEqualTo(StatusOrder.EM_SEPARACAO);
-        assertThat(shippimentRepository.findByOrderId(orderId).orElseThrow().getLabelGeneratedAt()).isNotNull();
+        assertThat(shippimentRepository.findByOrderId(orderId).orElseThrow().getEtiquetaPagaEm()).isNotNull();
 
         assertThat(outboxEventRepository.findAll())
                 .extracting(ev -> ev.getType())
@@ -482,7 +482,7 @@ class ShippingFlowTest {
                 .order(orderRepository.findById(orderId).orElseThrow())
                 .meOrderId(meOrderId)
                 .serviceId(2)
-                .labelGeneratedAt(LocalDateTime.now())
+                .etiquetaPagaEm(LocalDateTime.now())
                 .build());
     }
 

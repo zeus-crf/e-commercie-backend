@@ -96,7 +96,7 @@ public class ShippingService {
         }
 
         boolean etiquetaPaga = shippimentRepository.findByOrderId(orderId)
-                .map(Shipment::getLabelGeneratedAt)
+                .map(Shipment::getEtiquetaPagaEm)
                 .isPresent();
 
         if (etiquetaPaga) {
@@ -108,7 +108,7 @@ public class ShippingService {
         }
 
         String pendente = shippimentRepository.findByOrderId(orderId)
-                .filter(envio -> envio.getLabelGeneratedAt() == null)
+                .filter(envio -> envio.getEtiquetaPagaEm() == null)
                 .map(Shipment::getMeOrderId)
                 .orElse(null);
 
@@ -123,7 +123,7 @@ public class ShippingService {
                 .order(order)
                 .meOrderId(meOrderId)
                 .serviceId(order.getShippingServiceId())
-                .build());   // labelGeneratedAt null = pendente
+                .build());   // etiquetaPagaEm null = pendente
     }
 
     private Shipment concluir(String orderId) {
@@ -132,7 +132,7 @@ public class ShippingService {
 
         Shipment shipment = shippimentRepository.findByOrderId(order.getId())
                 .orElseThrow(() -> new IllegalStateException("Envio pendente não encontrado para o pedido " + orderId));
-        shipment.setLabelGeneratedAt(LocalDateTime.now());
+        shipment.setEtiquetaPagaEm(LocalDateTime.now());
         return shipment;
     }
 
@@ -145,7 +145,7 @@ public class ShippingService {
                         .meOrderId(meOrderId)
                         .serviceId(order.getShippingServiceId())
                         .checkoutIniciadoEm(LocalDateTime.now())   // nasce reservado para esta requisicao
-                        .build());                                 // labelGeneratedAt null = pendente
+                        .build());                                 // etiquetaPagaEm null = pendente
             });
         } catch (DataIntegrityViolationException e) {
             // UNIQUE(pedido_id): outra requisicao gravou o envio deste pedido depois do passo 1.
