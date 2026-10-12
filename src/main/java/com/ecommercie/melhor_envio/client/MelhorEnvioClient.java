@@ -1,5 +1,6 @@
 package com.ecommercie.melhor_envio.client;
 
+import com.ecommercie.melhor_envio.GeracaoRecusadaException;
 import com.ecommercie.melhor_envio.ShippingProvider;
 import com.ecommercie.melhor_envio.dto.*;
 import com.ecommercie.melhor_envio.enums.SituacaoEtiqueta;
@@ -16,6 +17,7 @@ import org.springframework.web.client.RestClient;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Adapter HTTP do Melhor Envio. So monta os payloads e chama a API: nao le nem grava no banco
@@ -50,6 +52,9 @@ public class MelhorEnvioClient implements ShippingProvider {
         }
         if (item.canceledAt() != null || item.expiredAt() != null) {
             return SituacaoEtiqueta.CANCELADA;
+        }
+        if (item.generatedAt() != null) {
+            return SituacaoEtiqueta.GERADA;
         }
         if (item.paidAt() != null){
             return SituacaoEtiqueta.PAGA;
@@ -150,6 +155,38 @@ public class MelhorEnvioClient implements ShippingProvider {
                 .body(new MeCheckoutRequest(List.of(meOrderId)))
                 .retrieve()
                 .toBodilessEntity();
+    }
+
+    @Override
+    public void gerarEtiqueta(String meOrderId) {
+        Map<String, MeGenerateResult> resposta;
+        try {
+            resposta = restClient.post()
+                    .uri("/api/v2/me/shipment/generate")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(new MeCheckoutRequest(List.of(meOrderId)))   // mesmo corpo do checkout: {"orders": [...]}
+                    .retrieve()
+                    .body(new ParameterizedTypeReference<>() {});
+        } catch (HttpClientErrorException e) {
+            throw new GeracaoRecusadaException(e.getResponseBodyAsString());
+        }
+        MeGenerateResult resultado = resposta == null ? null : resposta.get(meOrderId);
+        if (resultado == null || !resultado.status()) {
+            throw new GeracaoRecusadaException(resultado == null
+                    ? "o Melhor Envio não devolveu o resultado da etiqueta " + meOrderId
+                    : resultado.message());
+        }
+    }
+
+    @Override
+    public String linkImpressao(String meOrderId) {
+        MePrintResponse resposta = restClient.post()
+                .uri("/api/v2/me/shipment/print")
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(new MePrintRequest("private", List.of(meOrderId)))
+                .retrieve()
+                .body(MePrintResponse.class);
+        return resposta.url();
     }
 
     @Override
