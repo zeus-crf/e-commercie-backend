@@ -1,6 +1,7 @@
 package com.ecommercie.pedido.controller;
 
 import com.ecommercie.config.OpenApiConfig;
+import com.ecommercie.pedido.cep.ValidadorCep;
 import com.ecommercie.pedido.dtos.CheckoutRequest;
 import com.ecommercie.pedido.dtos.OrderResponse;
 import com.ecommercie.pedido.service.OrderService;
@@ -30,11 +31,14 @@ import org.springframework.web.bind.annotation.*;
 public class OrderController {
 
     private final OrderService orderService;
+    private final ValidadorCep validadorCep;
 
     @Operation(summary = "Finaliza a compra, gerando um pedido a partir do carrinho")
     @PostMapping
     public ResponseEntity<ApiResponse<OrderResponse>> checkout(@AuthenticationPrincipal UserDetails userDetails,
                                                                @RequestBody @Valid CheckoutRequest request) {
+        // fora da transacao do checkout: e uma chamada HTTP (ViaCEP)
+        validadorCep.validar(request.cep(), request.uf());
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.ok("Pedido realizado com sucesso",
                         orderService.checkout((User) userDetails, request)));

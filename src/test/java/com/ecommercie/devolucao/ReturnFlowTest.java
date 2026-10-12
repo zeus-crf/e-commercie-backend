@@ -1,6 +1,8 @@
 package com.ecommercie.devolucao;
 
 import com.ecommercie.TestcontainersConfiguration;
+import com.ecommercie.pedido.cep.ConsultaCep;
+import com.ecommercie.pedido.cep.ResultadoCep;
 import com.ecommercie.carrinho.repository.CartRepository;
 import com.ecommercie.catalogo.models.Category;
 import com.ecommercie.catalogo.models.Product;
@@ -37,6 +39,8 @@ import org.springframework.test.web.servlet.MockMvc;
 import java.math.BigDecimal;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -62,6 +66,7 @@ class ReturnFlowTest {
 
     @MockitoBean EmailService emailService;
     @MockitoBean PaymentRefundClient paymentRefundClient;
+    @MockitoBean ConsultaCep consultaCep;
 
     private static final String ENDERECO = """
             { "logradouro":"Rua A","numero":"10","bairro":"Centro","cidade":"Sao Paulo","uf":"SP","cep":"01000000","serviceId":1,"valorFrete":15.00 }
@@ -70,6 +75,7 @@ class ReturnFlowTest {
     @BeforeEach
     void limpar() {
         databaseCleaner.limparTudo();
+        when(consultaCep.consultar(anyString())).thenReturn(ResultadoCep.encontrado("SP"));
     }
 
     // ─── helpers ────────────────────────────────────────────────────────────────

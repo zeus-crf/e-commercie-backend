@@ -1,6 +1,8 @@
 package com.ecommercie.support;
 
 import com.ecommercie.mercado_pago.PaymentGateway;
+import com.ecommercie.pedido.cep.ConsultaCep;
+import com.ecommercie.pedido.cep.ResultadoCep;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
@@ -25,5 +27,12 @@ public class ExternalStubsConfiguration {
     @Primary
     StubShippingProvider stubShippingProvider() {
         return new StubShippingProvider();
+    }
+
+    // todo CEP "existe" e e de SP (a UF dos enderecos dos testes)
+    @Bean
+    @Primary
+    ConsultaCep stubConsultaCep() {
+        return cep -> ResultadoCep.encontrado("SP");
     }
 }

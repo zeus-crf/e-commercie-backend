@@ -1,6 +1,8 @@
 package com.ecommercie.pedido;
 
 import com.ecommercie.TestcontainersConfiguration;
+import com.ecommercie.pedido.cep.ConsultaCep;
+import com.ecommercie.pedido.cep.ResultadoCep;
 import com.ecommercie.carrinho.repository.CartRepository;
 import com.ecommercie.catalogo.models.Category;
 import com.ecommercie.catalogo.models.Product;
@@ -31,12 +33,15 @@ import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -69,6 +74,8 @@ class OrderFlowTest {
     @Autowired DatabaseCleaner databaseCleaner;
     @Autowired OutboxEventRepository outboxEventRepository;
 
+    @MockitoBean ConsultaCep consultaCep;   // nenhum teste chama o ViaCEP de verdade
+
     private static final String ENDERECO = """
             { "logradouro":"Rua A","numero":"10","bairro":"Centro","cidade":"Sao Paulo","uf":"SP","cep":"01000000","serviceId":1,"valorFrete":15.00 }
             """;
@@ -77,6 +84,7 @@ class OrderFlowTest {
     @BeforeEach
     void limpar() {
         databaseCleaner.limparTudo();
+        when(consultaCep.consultar(anyString())).thenReturn(ResultadoCep.encontrado("SP"));
     }
 
     // ----------------- helpers -----------------
@@ -147,6 +155,69 @@ class OrderFlowTest {
         mockMvc.perform(post("/api/v1/orders").cookie(cli)
                         .contentType(MediaType.APPLICATION_JSON).content(ENDERECO))
                 .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void checkout_cepOuUfInvalidos_retorna400SemCriarPedido() throws Exception {
+        Cookie cli = clienteCookie("a@test.com");
+        Product p = produtoComEstoque("Camiseta", "100.00", 10);
+        addAoCarrinho(cli, p.getId(), 1);
+
+        // CEP com 11 dígitos (caso real: o ME recusou só na hora da etiqueta) e UF minúscula
+        String invalido = ENDERECO.replace("\"01000000\"", "\"25638539363\"").replace("\"SP\"", "\"sp\"");
+
+        mockMvc.perform(post("/api/v1/orders").cookie(cli)
+                        .contentType(MediaType.APPLICATION_JSON).content(invalido))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.data.cep").exists())
+                .andExpect(jsonPath("$.data.uf").exists());
+
+        assertThat(orderRepository.findAll()).isEmpty();
+        assertThat(inventoryItemRepository.findByProductId(p.getId()).orElseThrow().getReservada()).isZero();
+    }
+
+    @Test
+    void checkout_cepInexistente_retorna400SemCriarPedido() throws Exception {
+        // caso real: CEP com 8 digitos que nao existe; a cotacao do ME aceitou e o ME so recusou na etiqueta
+        when(consultaCep.consultar("01000000")).thenReturn(ResultadoCep.inexistente());
+        Cookie cli = clienteCookie("a@test.com");
+        Product p = produtoComEstoque("Camiseta", "100.00", 10);
+        addAoCarrinho(cli, p.getId(), 1);
+
+        mockMvc.perform(post("/api/v1/orders").cookie(cli)
+                        .contentType(MediaType.APPLICATION_JSON).content(ENDERECO))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("CEP 01000000 não encontrado. Confira o CEP do endereço de entrega."));
+
+        assertThat(orderRepository.findAll()).isEmpty();
+        assertThat(inventoryItemRepository.findByProductId(p.getId()).orElseThrow().getReservada()).isZero();
+    }
+
+    @Test
+    void checkout_ufNaoBateComOCep_retorna400() throws Exception {
+        when(consultaCep.consultar("01000000")).thenReturn(ResultadoCep.encontrado("RJ"));
+        Cookie cli = clienteCookie("a@test.com");
+        Product p = produtoComEstoque("Camiseta", "100.00", 10);
+        addAoCarrinho(cli, p.getId(), 1);
+
+        mockMvc.perform(post("/api/v1/orders").cookie(cli)
+                        .contentType(MediaType.APPLICATION_JSON).content(ENDERECO))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("O CEP 01000000 é de RJ, mas a UF informada é SP."));
+
+        assertThat(orderRepository.findAll()).isEmpty();
+    }
+
+    @Test
+    void checkout_servicoDeCepFora_naoTravaAVenda() throws Exception {
+        when(consultaCep.consultar("01000000")).thenReturn(ResultadoCep.indisponivel());
+        Cookie cli = clienteCookie("a@test.com");
+        Product p = produtoComEstoque("Camiseta", "100.00", 10);
+        addAoCarrinho(cli, p.getId(), 1);
+
+        checkout(cli);   // espera 201
+
+        assertThat(orderRepository.findAll()).hasSize(1);
     }
 
     // ----------------- checkout -----------------

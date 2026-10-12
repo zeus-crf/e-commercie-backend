@@ -179,6 +179,7 @@ Todas vivem no `.env` (fora do git). O modelo é o `.env.example`. **Nenhum segr
 | `MP_ACCESS_TOKEN` `MP_NOTIFICATION_URL` | **sim** | Mercado Pago |
 | `ME_TOKEN` `ME_USER_AGENT` `SHIPPING_ORIGIN_CEP` | **sim** | Melhor Envio |
 | `ME_BASE_URL` | não | padrão: sandbox do Melhor Envio |
+| `ME_WEBHOOK_SECRET` | **sim** | secret do aplicativo do ME: valida a assinatura (`X-ME-Signature`) do webhook de rastreio |
 | `MAIL_HOST` `MAIL_PORT` `MAIL_USER` `MAIL_PASS` `MAIL_AUTH` `MAIL_STARTTLS` `MAIL_FROM` | não | SMTP transacional (padrão: `localhost:1025`, sem auth) |
 | `FISCAL_ENABLED` `FISCAL_TIPO` `FOCUSNFE_*` | não | módulo fiscal (padrão: desligado) |
 
@@ -205,6 +206,13 @@ ngrok http 8080
 
 No sandbox do Mercado Pago, **pague com a conta "Comprador" de teste**, nunca com a do vendedor
 (pagar com o vendedor não dispara o webhook).
+
+Para o Melhor Envio, cadastre `https://SEU-TUNEL/api/v1/webhooks/melhorenvio` no **mesmo aplicativo**
+do `ME_TOKEN` (painel → Integrações → Área Dev → "Novo Webhook") e use o secret desse aplicativo em
+`ME_WEBHOOK_SECRET`. Sandbox e produção têm painéis e aplicativos separados: o webhook e o secret
+precisam ser do mesmo ambiente do token. Chamadas sem assinatura válida recebem 401. No sandbox o
+status só avança depois que a etiqueta é **gerada** no painel; daí em diante muda sozinho a cada
+~15 minutos até "entregue". O inspetor do ngrok (<http://127.0.0.1:4040>) mostra cada chamada e a resposta.
 
 ---
 
@@ -260,18 +268,25 @@ O módulo fiscal nasce **desligado** (`FISCAL_ENABLED=false`) e a loja funciona 
 - **Assinatura do webhook do Mercado Pago:** a validação do cabeçalho `x-signature` ainda não está
   implementada. A idempotência está (tabela `webhook_event`), e o pagamento é sempre reconsultado na
   API do MP antes de marcar o pedido como pago.
-- **Transições de pedido espalhadas:** o `MelhorEnvioClient.buyLabel` (um adapter HTTP) muda o status
-  do pedido para `EM_SEPARACAO`/`ENVIADO`, e o webhook de rastreio (`ShipmentTrackingService`) marca
-  `ENTREGUE` direto na entidade. Por isso o e-mail de "enviado" é registrado em dois lugares
-  (`OrderService.enviar` e `ShippingService.gerarEtiqueta`) e o de "entregue" também
-  (`OrderService.entregar` e `ShipmentTrackingService`). O ideal é concentrar cada transição num
-  único método do `OrderService`, que já registra o e-mail, chamado pelos dois caminhos — e o
-  client só falar com a API do Melhor Envio.
 - **Pedido aguardando postagem:** pagar a etiqueta não marca o pedido como enviado. Ele fica EM_SEPARACAO até
   o Melhor Envio avisar a postagem (webhook `posted`), e aí vira ENVIADO e o cliente recebe o e-mail com o
   código de rastreio. Como o app ainda não gera a etiqueta, o dono precisa gerá-la e imprimi-la no painel do ME
   para o `posted` chegar. Se o webhook não vier, o admin pode marcar o envio à mão com
   `PATCH /api/v1/admin/orders/{id}/enviar`.
+- **Etiqueta paga sem PDF:** o fluxo do app para na compra (a etiqueta fica `released`, sem
+  `generated_at`); faltam as chamadas de gerar (`/shipment/generate`) e imprimir (`/shipment/print`).
+  Hoje o admin termina pelo painel do ME (ver o item acima).
+- **Etiqueta: decisão pela consulta ao ME.** Antes de pagar de novo um envio pendente, o sistema
+  consulta o ME (`MelhorEnvioClient.consultarSituacao`) e decide pelas datas `paid_at`, `canceled_at` e
+  `expired_at`. Uma resposta que não se encaixe vira `INDEFINIDA` e bloqueia a compra (409).
+- **Carrinhos órfãos no Melhor Envio:** compra recusada ou corrida de clique duplo deixam itens no
+  carrinho do ME (não são cobrados). Removê-los pela API fica para depois.
+- **CEP no checkout:** o checkout confere o CEP no ViaCEP (existe e a UF bate), porque a cotação do ME
+  aceita qualquer CEP de 8 dígitos e o erro só apareceria na etiqueta. Se o ViaCEP estiver fora do ar,
+  o checkout segue sem validar.
+- **Estorno dentro de transação:** `ReturnService.confirmarDevolucao` chama o estorno do Mercado Pago
+  dentro de `@Transactional` — o mesmo problema que a etiqueta tinha. Aplicar a mesma separação antes
+  do go-live.
 
 ---
 
