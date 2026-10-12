@@ -149,6 +149,25 @@ class OrderFlowTest {
                 .andExpect(status().isBadRequest());
     }
 
+    @Test
+    void checkout_cepOuUfInvalidos_retorna400SemCriarPedido() throws Exception {
+        Cookie cli = clienteCookie("a@test.com");
+        Product p = produtoComEstoque("Camiseta", "100.00", 10);
+        addAoCarrinho(cli, p.getId(), 1);
+
+        // CEP com 11 dígitos (caso real: o ME recusou só na hora da etiqueta) e UF minúscula
+        String invalido = ENDERECO.replace("\"01000000\"", "\"25638539363\"").replace("\"SP\"", "\"sp\"");
+
+        mockMvc.perform(post("/api/v1/orders").cookie(cli)
+                        .contentType(MediaType.APPLICATION_JSON).content(invalido))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.data.cep").exists())
+                .andExpect(jsonPath("$.data.uf").exists());
+
+        assertThat(orderRepository.findAll()).isEmpty();
+        assertThat(inventoryItemRepository.findByProductId(p.getId()).orElseThrow().getReservada()).isZero();
+    }
+
     // ----------------- checkout -----------------
 
     @Test
