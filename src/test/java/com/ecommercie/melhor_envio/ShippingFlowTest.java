@@ -30,6 +30,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.cglib.core.Local;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -43,6 +44,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+import static org.hamcrest.Matchers.containsString;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 
 /**
  * Frete: geração de etiqueta (orquestrada pelo ShippingService) e webhook de rastreio.
@@ -79,7 +83,7 @@ class ShippingFlowTest {
     // ----------------- etiqueta -----------------
 
     @Test
-    void gerarEtiqueta_pagaEtiqueta_pedidoSegueEmSeparacao_semAvisarCliente() throws Exception {
+    void gerarEtiqueta_pagaEGeraNumCliqueSo_pedidoSegueEmSeparacao() throws Exception {
         String orderId = pedidoPago();
 
         mockMvc.perform(post("/api/v1/admin/orders/{id}/label", orderId).cookie(adminCookie()))
@@ -89,7 +93,9 @@ class ShippingFlowTest {
         assertThat(shippimentRepository.findAll()).singleElement().satisfies(envio -> {
             assertThat(envio.getMeOrderId()).isEqualTo(StubShippingProvider.ME_ORDER_PREFIX + orderId);
             assertThat(envio.getServiceId()).isEqualTo(2);
-            assertThat(envio.getEtiquetaPagaEm()).isNotNull();
+            assertThat(envio.getEtiquetaGeradaEm()).isNotNull();
+            assertThat(shippingStub.geracoes()).containsExactly(StubShippingProvider.ME_ORDER_PREFIX + orderId);
+
         });
 
         // o client recebeu um snapshot com os dados do pedido
@@ -132,8 +138,8 @@ class ShippingFlowTest {
         mockMvc.perform(post("/api/v1/admin/orders/{id}/label", orderId).cookie(adminCookie()))
                 .andExpect(status().isOk());
 
-        // carrinho + compra: nenhuma das duas chamadas HTTP pode segurar transacao do banco
-        assertThat(shippingStub.transacaoAtivaNasChamadas()).containsExactly(false, false);
+        // carrinho + compra + geracao: nenhuma das chamadas HTTP pode segurar transacao do banco
+        assertThat(shippingStub.transacaoAtivaNasChamadas()).containsExactly(false, false, false);
     }
 
 
@@ -254,7 +260,7 @@ class ShippingFlowTest {
     }
 
     @Test
-    void gerarEtiqueta_etiquetaJaPaga_recusaSemChamarOMelhorEnvio() throws Exception {
+    void gerarEtiqueta_etiquetaJaGerada_recusaSemChamarOMelhorEnvio() throws Exception {
         String orderId = pedidoPago();
         Cookie admin = adminCookie();
 
@@ -262,11 +268,13 @@ class ShippingFlowTest {
                 .andExpect(status().isOk());
 
         mockMvc.perform(post("/api/v1/admin/orders/{id}/label", orderId).cookie(admin))
-                .andExpect(status().isUnprocessableEntity());
+                        .andExpect(status().isUnprocessableEntity())
+                                .andExpect(jsonPath("$.message").value(containsString("já foi gerada")));
 
         assertThat(shippingStub.carrinhos()).hasSize(1);
         assertThat(shippingStub.compras()).hasSize(1);
         assertThat(shippimentRepository.findAll()).hasSize(1);
+        assertThat(shippingStub.geracoes()).hasSize(1);
     }
 
     // ----------------- rastreio -----------------
@@ -449,6 +457,74 @@ class ShippingFlowTest {
                 .satisfies(ev -> assertThat(ev.getPayload()).contains("BR123"));
     }
 
+    @Test
+    void geracaoSemResposta_etiquetaFicaPaga_eORetrySoGera() throws Exception {
+        String orderId = pedidoPago();
+        Cookie admin = adminCookie();
+        String meOrderId  = StubShippingProvider.ME_ORDER_PREFIX + orderId;
+        shippingStub.falharNaGeracaoSemResposta(true);
+
+        mockMvc.perform(post("/api/v1/admin/orders/{id}/label", orderId).cookie(admin))
+                .andExpect(status().isConflict());
+
+        assertThat(shippimentRepository.findByOrderId(orderId).orElseThrow()).satisfies(envio -> {
+            assertThat(envio.getEtiquetaGeradaEm()).isNull();
+            assertThat(envio.getEtiquetaPagaEm()).isNotNull();
+        });
+
+        shippingStub.falharNaGeracaoSemResposta(false);
+        mockMvc.perform(post("/api/v1/admin/orders/{id}/label", orderId).cookie(admin))
+                .andExpect(status().isOk());
+
+        assertThat(shippingStub.carrinhos()).hasSize(1);
+        assertThat(shippingStub.compras()).containsExactly(meOrderId);
+        assertThat(shippingStub.consultas()).containsExactly(meOrderId);
+        assertThat(shippingStub.geracoes()).containsExactly(meOrderId);
+        assertEtiquetaPagaAguardandoPostagem(orderId);
+    }
+
+    @Test
+    void geracaoRecusadaPeloMe_422ComOMotivo_eORetrySoGera() throws Exception {
+        String orderId = pedidoPago();
+        Cookie admin = adminCookie();
+        String meOrderId = StubShippingProvider.ME_ORDER_PREFIX + orderId;
+
+        shippingStub.recusarGeracao(true);
+
+
+        mockMvc.perform(post("/api/v1/admin/orders/{id}/label", orderId).cookie(admin))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.message").value(containsString("CPF do destinatario invalido")));
+
+        assertThat(shippimentRepository.findByOrderId(orderId).orElseThrow().getEtiquetaGeradaEm()).isNull();
+
+        shippingStub.recusarGeracao(false);
+        mockMvc.perform(post("/api/v1/admin/orders/{id}/label", orderId).cookie(admin))
+                .andExpect(status().isOk());
+
+        assertThat(shippingStub.compras()).containsExactly(meOrderId);
+        assertThat(shippingStub.geracoes()).containsExactly(meOrderId);
+        assertEtiquetaPagaAguardandoPostagem(orderId);
+    }
+
+    @Test
+    void etiquetaPagaJaGeradaNoPainel_cliqueSoRegistraAGeracao() throws Exception {
+        String orderId = pedidoPago();
+        Order order = orderRepository.findById(orderId).orElseThrow();
+        order.markSeparando();
+        orderRepository.save(order);
+        envioPagoSemGerar(orderId, "me-gerada-no-painel");
+        shippingStub.situacao("me-gerada-no-painel", SituacaoEtiqueta.GERADA);
+
+        mockMvc.perform(post("/api/v1/admin/orders/{id}/label", orderId).cookie(adminCookie()))
+                .andExpect(status().isOk());
+
+        assertThat(shippingStub.carrinhos()).isEmpty();
+        assertThat(shippingStub.compras()).isEmpty();
+        assertThat(shippingStub.geracoes()).isEmpty();
+        assertThat(shippimentRepository.findByOrderId(orderId).orElseThrow().getEtiquetaGeradaEm()).isNotNull();
+    }
+
     // ----------------- helpers -----------------
 
     private void rastreio(String meOrderId, String statusMe) throws Exception {
@@ -462,6 +538,7 @@ class ShippingFlowTest {
         assertThat(orderRepository.findById(orderId).orElseThrow().getStatus())
                 .isEqualTo(StatusOrder.EM_SEPARACAO);
         assertThat(shippimentRepository.findByOrderId(orderId).orElseThrow().getEtiquetaPagaEm()).isNotNull();
+        assertThat(shippimentRepository.findByOrderId(orderId).orElseThrow().getEtiquetaGeradaEm()).isNotNull();
 
         assertThat(outboxEventRepository.findAll())
                 .extracting(ev -> ev.getType())
@@ -478,6 +555,17 @@ class ShippingFlowTest {
     }
 
     private void envioGravado(String orderId, String meOrderId) {
+        shippimentRepository.save(Shipment.builder()
+                .order(orderRepository.findById(orderId).orElseThrow())
+                .meOrderId(meOrderId)
+                .serviceId(2)
+                        .etiquetaGeradaEm(LocalDateTime.now())
+                .etiquetaPagaEm(LocalDateTime.now())
+                .build());
+    }
+
+    /** Envio pago numa tentativa anterior cuja geracao nao terminou. */
+    private void envioPagoSemGerar(String orderId, String meOrderId) {
         shippimentRepository.save(Shipment.builder()
                 .order(orderRepository.findById(orderId).orElseThrow())
                 .meOrderId(meOrderId)

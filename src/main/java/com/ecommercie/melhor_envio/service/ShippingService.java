@@ -20,6 +20,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClientException;
+import com.ecommercie.melhor_envio.GeracaoRecusadaException;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
@@ -42,88 +43,35 @@ public class ShippingService {
         return shippingProvider.quote(request);
     }
 
-    /**
-     * Gera a etiqueta sem segurar transacao do banco durante as chamadas ao Melhor Envio:
-     *
-     *   1. [tx] prepara: valida, separa o pedido e fotografa os dados (EtiquetaRequest)
-     *   2.      carrinho no ME (nao cobra)
-     *   3. [tx] grava o envio PENDENTE com o me_order_id, antes de pagar
-     *   4.      compra no ME (COBRA o saldo)
-     *   5. [tx] conclui: etiqueta gerada + pedido ENVIADO + e-mail
-     *
-     * Se algo falhar depois do passo 3, o retry encontra o envio pendente e reaproveita o
-     * carrinho (pula o passo 2) em vez de comprar outra etiqueta.
-     */
-    public Shipment gerarEtiqueta(String orderId) {
-        Preparo preparo = transactionTemplate.execute(tx -> preparar(orderId));
-
-        String meOrderId = preparo.meOrderIdPendente();
-        if (meOrderId != null) {
-            reservarCheckout(orderId);
-            SituacaoEtiqueta situacao = consultarNoMe(orderId, meOrderId);
-            if (situacao == SituacaoEtiqueta.PAGA) {
-                // o ME ja cobrou numa tentativa anterior (a resposta se perdeu): so conclui
-                return transactionTemplate.execute(tx -> concluir(orderId));
-            }
-            if (situacao == SituacaoEtiqueta.CANCELADA) {
-                transactionTemplate.executeWithoutResult(tx -> shippimentRepository.descartarPendente(orderId));
-                meOrderId = null;   // segue como se nao houvesse pendente: etiqueta nova no carrinho do ME
-            }
-        }
-        if (meOrderId == null) {
-            meOrderId = shippingProvider.adicionarAoCarrinho(preparo.request());
-            registrarPendenteReservado(orderId, meOrderId);
-        }
-
-        comprar(orderId, meOrderId);
-
-        return transactionTemplate.execute(tx -> concluir(orderId));
-    }
-
-    private record Preparo(EtiquetaRequest request, String meOrderIdPendente) {}
-
     private Preparo preparar(String orderId) {
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new EntityNotFoundException("Pedido não encontrado"));
         if (order.getShippingServiceId() == null) {
             throw new IllegalStateException("Pedido não possui transportadora selecionada (shippingServiceId null). Use um pedido feito após a seleção de frete.");
         }
-
-
         // valida ANTES de chamar o ME: nada de comprar etiqueta para pedido que nao pode ser enviado
         if (order.getStatus() != StatusOrder.PAGO && order.getStatus() != StatusOrder.EM_SEPARACAO) {
             throw new IllegalStateException("Só é possível gerar etiqueta para pedido pago ou em separação (status atual: " + order.getStatus() + ")");
         }
 
-        boolean etiquetaPaga = shippimentRepository.findByOrderId(orderId)
-                .map(Shipment::getEtiquetaPagaEm)
-                .isPresent();
-
-        if (etiquetaPaga) {
-            throw new IllegalStateException("A etiqueta deste pedido já foi paga. Gere e imprima pelo painel do Melhor Envio");
+        Shipment envio = shippimentRepository.findByOrderId(orderId).orElse(null);
+        if (envio != null && envio.getEtiquetaGeradaEm() != null) {
+            throw new IllegalStateException("A etiqueta deste pedido já foi gerada. Imprima com GET /api/v1/admin/orders/"
+                    + orderId + "/label/print.");
+        }
+        if (envio != null && envio.getEtiquetaPagaEm() != null) {
+            // paga numa tentativa anterior, mas a geracao nao terminou: o retry so gera
+            return new Preparo(null, null, envio.getMeOrderId());
         }
 
         if (order.getStatus() == StatusOrder.PAGO) {
             orderService.marcarSeparando(order);
         }
 
-        String pendente = shippimentRepository.findByOrderId(orderId)
-                .filter(envio -> envio.getEtiquetaPagaEm() == null)
-                .map(Shipment::getMeOrderId)
-                .orElse(null);
-
+        String pendente = envio != null ? envio.getMeOrderId() : null;   // aqui, se existe, o envio e pendente
         EtiquetaRequest request = EtiquetaRequest.from(order, order.getShippingServiceId(),
                 fiscalService.buscarPorPedido(orderId));
-        return new Preparo(request, pendente);
-    }
-
-    private void registrarPendente(String orderId, String meOrderId) {
-        Order order = orderRepository.getReferenceById(orderId);
-        shippimentRepository.save(Shipment.builder()
-                .order(order)
-                .meOrderId(meOrderId)
-                .serviceId(order.getShippingServiceId())
-                .build());   // etiquetaPagaEm null = pendente
+        return new Preparo(request, pendente, null);
     }
 
     private Shipment concluir(String orderId) {
@@ -195,4 +143,95 @@ public class ShippingService {
                     + "Confira no painel do ME se ela foi paga antes de tentar de novo.");
         }
     }
+
+    /** Gera a etiqueta ja paga. Fora de transacao: e uma chamada HTTP que avisa a transportadora. */
+    private Shipment gerar(String orderId, String meOrderId) {
+        try {
+            shippingProvider.gerarEtiqueta(meOrderId);
+        } catch (GeracaoRecusadaException e) {
+            throw new IllegalStateException("A etiqueta foi paga, mas o Melhor Envio recusou gerá-la: " + e.getMessage()
+                    + " Corrija e clique de novo: ela não será paga outra vez.");
+        } catch (RestClientException e) {
+            throw new ConflitoException("A etiqueta foi paga, mas não houve resposta do Melhor Envio ao gerá-la. "
+                    + "Clique de novo em instantes: ela não será paga outra vez.");
+        }
+        return registrarGeracao(orderId);
+    }
+
+    private Shipment registrarGeracao(String orderId) {
+        return transactionTemplate.execute(tx -> {
+            Shipment envio = shippimentRepository.findByOrderId(orderId)
+                    .orElseThrow(() -> new IllegalStateException("Envio não encontrado para o pedido " + orderId));
+            envio.setEtiquetaGeradaEm(LocalDateTime.now());
+            return envio;
+        });
+    }
+
+    /**
+     * Retry de uma etiqueta paga cuja geracao nao terminou. Confere no ME antes: a geracao pode ter dado
+     * certo (resposta perdida) ou o dono pode ter gerado pelo painel.
+     */
+    private Shipment retomarGeracao(String orderId, String meOrderId) {
+        SituacaoEtiqueta situacao;
+        try {
+            situacao = shippingProvider.consultarSituacao(meOrderId);
+        } catch (RestClientException e) {
+            situacao = SituacaoEtiqueta.INDEFINIDA;
+        }
+        return switch (situacao) {
+            case GERADA -> registrarGeracao(orderId);
+            case PAGA -> gerar(orderId, meOrderId);
+            case CANCELADA -> throw new IllegalStateException("A etiqueta deste pedido foi cancelada no Melhor Envio. "
+                    + "O app ainda não trata cancelamento: resolva pelo painel do ME.");
+            default -> throw new ConflitoException("Não foi possível confirmar no Melhor Envio a situação da etiqueta deste pedido. "
+                    + "Tente de novo em instantes ou confira no painel do ME.");
+        };
+    }
+
+    /**
+     * Paga e gera a etiqueta sem segurar transacao do banco durante as chamadas ao Melhor Envio:
+     *
+     *   1. [tx] prepara: valida, separa o pedido e fotografa os dados (EtiquetaRequest)
+     *   2.      carrinho no ME (nao cobra)
+     *   3. [tx] grava o envio PENDENTE com o me_order_id, antes de pagar
+     *   4.      compra no ME (COBRA o saldo)
+     *   5. [tx] conclui: etiqueta_paga_em
+     *   6.      gera no ME (avisa a transportadora)
+     *   7. [tx] etiqueta_gerada_em
+     *
+     * Se algo falhar depois do passo 3, o retry encontra o envio pendente e reaproveita o carrinho.
+     * Se falhar no passo 6, o retry encontra o envio PAGO e so gera: nunca paga de novo.
+     * O pedido segue EM_SEPARACAO ate o ME avisar a postagem (webhook "posted").
+     */
+    public Shipment gerarEtiqueta(String orderId) {
+        Preparo preparo = transactionTemplate.execute(tx -> preparar(orderId));
+
+        if (preparo.meOrderIdPagoSemGerar() != null) {
+            return retomarGeracao(orderId, preparo.meOrderIdPagoSemGerar());
+        }
+
+        String meOrderId = preparo.meOrderIdPendente();
+        if (meOrderId != null) {
+            reservarCheckout(orderId);
+            SituacaoEtiqueta situacao = consultarNoMe(orderId, meOrderId);
+            if (situacao == SituacaoEtiqueta.PAGA || situacao == SituacaoEtiqueta.GERADA) {
+                // o ME ja cobrou numa tentativa anterior (a resposta se perdeu): nao paga de novo
+                transactionTemplate.executeWithoutResult(tx -> concluir(orderId));
+                return situacao == SituacaoEtiqueta.GERADA ? registrarGeracao(orderId) : gerar(orderId, meOrderId);
+            }
+            if (situacao == SituacaoEtiqueta.CANCELADA) {
+                transactionTemplate.executeWithoutResult(tx -> shippimentRepository.descartarPendente(orderId));
+                meOrderId = null;   // segue como se nao houvesse pendente: etiqueta nova no carrinho do ME
+            }
+        }
+        if (meOrderId == null) {
+            meOrderId = shippingProvider.adicionarAoCarrinho(preparo.request());
+            registrarPendenteReservado(orderId, meOrderId);
+        }
+        comprar(orderId, meOrderId);
+        transactionTemplate.executeWithoutResult(tx -> concluir(orderId));
+        return gerar(orderId, meOrderId);
+    }
+
+    private record Preparo(EtiquetaRequest request, String meOrderIdPendente, String meOrderIdPagoSemGerar) {}
 }
