@@ -42,3 +42,10 @@ melhorenvio:
   base-url: https://sandbox.melhorenvio.com.br
   # secret FALSO, so para teste: o MelhorEnvioWebhookAssinatura (support) assina com o mesmo valor
   webhook-secret: segredo-webhook-de-teste
+
+# Os testes tambem carregam o .env local (spring.config.import no application.yml). Fixa o fiscal
+# desligado aqui para o resultado nao depender do FISCAL_ENABLED de quem roda; quem precisa da regra
+# ligada usa @MockitoBean PoliticaFiscal.
+features:
+  fiscal:
+    enabled: false

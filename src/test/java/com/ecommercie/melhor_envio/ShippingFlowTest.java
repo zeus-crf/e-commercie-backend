@@ -30,23 +30,28 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
-import org.springframework.cglib.core.Local;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
+import com.ecommercie.fiscal.PoliticaFiscal;
+import com.ecommercie.fiscal.enums.FiscalDocumentType;
+import com.ecommercie.fiscal.enums.InvoiceStatus;
+import com.ecommercie.fiscal.model.Invoice;
+import com.ecommercie.fiscal.repository.InvoiceRepository;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
+import static org.assertj.core.api.Assertions.as;
+import static org.mockito.Mockito.when;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.tuple;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
-
 import static org.hamcrest.Matchers.containsString;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
  * Frete: geração de etiqueta (orquestrada pelo ShippingService) e webhook de rastreio.
@@ -70,6 +75,8 @@ class ShippingFlowTest {
     @Autowired PasswordEncoder passwordEncoder;
     @Autowired DatabaseCleaner databaseCleaner;
     @Autowired StubShippingProvider shippingStub;
+    @Autowired InvoiceRepository invoiceRepository;
+    @MockitoBean PoliticaFiscal politicaFiscal;   // padrao do mock: false = fiscal desligado, como nos outros testes
 
     private static final String ENDERECO = """
             { "logradouro":"Rua A","numero":"10","bairro":"Centro","cidade":"Sao Paulo","uf":"SP","cep":"01000000","serviceId":2,"valorFrete":15.00 }
@@ -523,6 +530,47 @@ class ShippingFlowTest {
         assertThat(shippingStub.compras()).isEmpty();
         assertThat(shippingStub.geracoes()).isEmpty();
         assertThat(shippimentRepository.findByOrderId(orderId).orElseThrow().getEtiquetaGeradaEm()).isNotNull();
+    }
+
+    @Test
+    void fiscalLigado_semDocumentoAutorizado_recusaSemChamarOMe() throws Exception {
+        when(politicaFiscal.exigeDocumentoNaEtiqueta())
+                .thenReturn(true);
+        String orderId = pedidoPago();
+        Cookie admin = adminCookie();
+
+        mockMvc.perform(post("/api/v1/admin/orders/{id}/label", orderId).cookie(admin))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.message").value(containsString("documento fiscal")));
+
+        assertThat(shippingStub.carrinhos()).isEmpty();
+        assertThat(shippimentRepository.findAll()).isEmpty();
+        assertThat(orderRepository.findById(orderId).orElseThrow().getStatus()).isEqualTo(StatusOrder.PAGO);
+
+    }
+
+    @Test
+    void fiscalLigado_comDocumentoAutorizado_mandaAChaveParaOMe() throws Exception {
+        when(politicaFiscal.exigeDocumentoNaEtiqueta())
+                .thenReturn(true);
+        String orderId = pedidoPago();
+        Cookie admin = adminCookie();
+
+        invoiceRepository.save(Invoice.builder()
+                .order(orderRepository.findById(orderId).orElseThrow())
+                .tipo(FiscalDocumentType.DCE)
+                .chave("CHAVE-DCE-123")
+                .status(InvoiceStatus.AUTORIZADO)
+                .build());
+
+
+        mockMvc.perform(post("/api/v1/admin/orders/{id}/label", orderId).cookie(admin))
+                .andExpect(status().isOk());
+
+
+        assertThat(shippingStub.carrinhos()).singleElement()
+                .satisfies(req -> assertThat(req.documentoFiscal().chave()).isEqualTo("CHAVE-DCE-123"));
+
     }
 
     // ----------------- helpers -----------------

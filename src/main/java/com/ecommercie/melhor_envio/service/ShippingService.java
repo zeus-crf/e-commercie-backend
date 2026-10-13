@@ -1,5 +1,8 @@
 package com.ecommercie.melhor_envio.service;
 
+import com.ecommercie.fiscal.PoliticaFiscal;
+import com.ecommercie.fiscal.enums.InvoiceStatus;
+import com.ecommercie.fiscal.model.Invoice;
 import com.ecommercie.fiscal.service.FiscalService;
 import com.ecommercie.melhor_envio.ShippingProvider;
 import com.ecommercie.melhor_envio.dto.EtiquetaRequest;
@@ -25,6 +28,7 @@ import com.ecommercie.melhor_envio.GeracaoRecusadaException;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
@@ -38,6 +42,7 @@ public class ShippingService {
     // o Spring Boot ja registra um TransactionTemplate para o transaction manager do JPA
     private final TransactionTemplate transactionTemplate;
     static final Duration JANELA_CHECKOUT = Duration.ofMinutes(5);
+    private final PoliticaFiscal politicaFiscal;
 
     public List<ShippingQuote> quote(ShippingQuoteRequest request){
         return shippingProvider.quote(request);
@@ -63,14 +68,20 @@ public class ShippingService {
             // paga numa tentativa anterior, mas a geracao nao terminou: o retry so gera
             return new Preparo(null, null, envio.getMeOrderId());
         }
+        Optional<Invoice> documentoFiscal = fiscalService.buscarPorPedido(orderId);
+        if (politicaFiscal.exigeDocumentoNaEtiqueta()
+                && documentoFiscal.filter(inv -> inv.getStatus() == InvoiceStatus.AUTORIZADO).isEmpty()) {
+            // a chave do documento vai no carrinho do ME: sem ela a etiqueta sairia sem nota
+            throw new IllegalStateException("O documento fiscal deste pedido ainda não foi autorizado. Confira em GET /api/v1/admin/orders/"
+                    + orderId + "/invoice e gere a etiqueta depois da emissão.");
+        }
 
         if (order.getStatus() == StatusOrder.PAGO) {
             orderService.marcarSeparando(order);
         }
 
         String pendente = envio != null ? envio.getMeOrderId() : null;   // aqui, se existe, o envio e pendente
-        EtiquetaRequest request = EtiquetaRequest.from(order, order.getShippingServiceId(),
-                fiscalService.buscarPorPedido(orderId));
+        EtiquetaRequest request = EtiquetaRequest.from(order, order.getShippingServiceId(), documentoFiscal);
         return new Preparo(request, pendente, null);
     }
 
