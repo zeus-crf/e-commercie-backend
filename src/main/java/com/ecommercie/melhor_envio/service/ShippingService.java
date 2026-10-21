@@ -244,5 +244,14 @@ public class ShippingService {
         return gerar(orderId, meOrderId);
     }
 
+    public String linkImpressao(String orderId) {
+        String meOrderId = shippimentRepository.findByOrderId(orderId)
+                .filter(envio -> envio.getEtiquetaGeradaEm() != null)
+                .map(Shipment::getMeOrderId)
+                .orElseThrow(() -> new IllegalStateException("A etiqueta deste pedido ainda não foi gerada. "
+                        + "Gere com POST /api/v1/admin/orders/" + orderId + "/label."));
+        return shippingProvider.linkImpressao(meOrderId);
+    }
+
     private record Preparo(EtiquetaRequest request, String meOrderIdPendente, String meOrderIdPagoSemGerar) {}
 }

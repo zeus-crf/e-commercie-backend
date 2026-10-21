@@ -46,6 +46,7 @@ import static org.assertj.core.api.Assertions.as;
 import static org.mockito.Mockito.when;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
@@ -571,6 +572,28 @@ class ShippingFlowTest {
         assertThat(shippingStub.carrinhos()).singleElement()
                 .satisfies(req -> assertThat(req.documentoFiscal().chave()).isEqualTo("CHAVE-DCE-123"));
 
+    }
+
+    @Test
+    void imprimir_etiquetaGerada_devolveOLinkDoMe() throws Exception {
+        String orderId = pedidoPago();
+        Cookie admin = adminCookie();
+        mockMvc.perform(post("/api/v1/admin/orders/{id}/label", orderId).cookie(admin))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(get("/api/v1/admin/orders/{id}/label/print", orderId).cookie(admin))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.url").value(
+                        StubShippingProvider.LINK_IMPRESSAO_PREFIX + StubShippingProvider.ME_ORDER_PREFIX + orderId));
+    }
+
+    @Test
+    void imprimir_etiquetaAindaNaoGerada_recusa() throws Exception {
+        String orderId = pedidoPago();
+
+        mockMvc.perform(get("/api/v1/admin/orders/{id}/label/print", orderId).cookie(adminCookie()))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.message").value(containsString("ainda não foi gerada")));
     }
 
     // ----------------- helpers -----------------
