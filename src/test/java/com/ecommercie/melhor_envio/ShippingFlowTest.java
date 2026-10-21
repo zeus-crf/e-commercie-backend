@@ -596,6 +596,23 @@ class ShippingFlowTest {
                 .andExpect(jsonPath("$.message").value(containsString("ainda não foi gerada")));
     }
 
+    @Test
+    void rastreioGerado_registraAGeracao_semMudarOPedido() throws Exception {
+        String orderId = pedidoPago();
+        Order order = orderRepository.findById(orderId).orElseThrow();
+
+        order.markSeparando();
+        orderRepository.save(order);
+        envioPagoSemGerar(orderId, "me-gerado");
+
+        rastreio("me-gerado", "generated");
+
+        assertThat(shippimentRepository.findByOrderId(orderId).orElseThrow().getEtiquetaGeradaEm()).isNotNull();
+        assertThat(orderRepository.findById(orderId).orElseThrow().getStatus()).isEqualTo(StatusOrder.EM_SEPARACAO);
+        assertThat(outboxEventRepository.findAll()).extracting(ov -> ov.getType())
+                .doesNotContain(OutboxTypes.EMAIL_PEDIDO_ENVIADO);
+    }
+
     // ----------------- helpers -----------------
 
     private void rastreio(String meOrderId, String statusMe) throws Exception {

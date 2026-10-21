@@ -40,6 +40,10 @@ public class ShipmentTrackingService {
         }
         shipment.setTrackingStatus(event.status());
 
+        if ("generated".equals(event.status())) {
+            shipment.setEtiquetaGeradaEm(LocalDateTime.now());
+        }
+
         if ("posted".equals(event.status())) {
             shipment.setPostedAt(LocalDateTime.now());
             Order order = shipment.getOrder();
@@ -65,6 +69,7 @@ public class ShipmentTrackingService {
                 log.warn("Tracking 'delivered' ignorado para pedido {} em {}", order.getId(), order.getStatus());
             }
         }
+
 
         shipmentRepository.save(shipment);
 
