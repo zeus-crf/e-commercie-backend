@@ -19,7 +19,7 @@ public interface ShippimentRepository extends JpaRepository<Shipment, String> {
     @Query("""
             UPDATE Shipment s SET s.checkoutIniciadoEm = :agora
             WHERE s.order.id = :orderId
-              AND s.labelGeneratedAt IS NULL
+              AND s.etiquetaPagaEm IS NULL
               AND (s.checkoutIniciadoEm IS NULL OR s.checkoutIniciadoEm < :expiraAntesDe)
             """)
     int reservarCheckout(@Param("orderId") String orderId,
@@ -28,12 +28,12 @@ public interface ShippimentRepository extends JpaRepository<Shipment, String> {
 
     // Apaga o envio PENDENTE do pedido (o ME recusou a compra): o proximo retry monta carrinho novo
     @Modifying
-    @Query("DELETE FROM Shipment s WHERE s.order.id = :orderId AND s.labelGeneratedAt IS NULL")
+    @Query("DELETE FROM Shipment s WHERE s.order.id = :orderId AND s.etiquetaPagaEm IS NULL")
     int descartarPendente(@Param("orderId") String orderId);
 
 
     // Solta a reserva do checkout de um envio PENDENTE (ex.: nao deu para consultar o ME)
     @Modifying
-    @Query("UPDATE Shipment s SET s.checkoutIniciadoEm = NULL WHERE s.order.id = :orderId AND s.labelGeneratedAt IS NULL")
+    @Query("UPDATE Shipment s SET s.checkoutIniciadoEm = NULL WHERE s.order.id = :orderId AND s.etiquetaPagaEm IS NULL")
     int liberarReserva(@Param("orderId") String orderId);
 }

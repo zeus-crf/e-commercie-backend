@@ -1,5 +1,6 @@
 package com.ecommercie.support;
 
+import com.ecommercie.melhor_envio.GeracaoRecusadaException;
 import com.ecommercie.melhor_envio.ShippingProvider;
 import com.ecommercie.melhor_envio.dto.EtiquetaRequest;
 import com.ecommercie.melhor_envio.dto.ShippingQuote;
@@ -27,6 +28,7 @@ public class StubShippingProvider implements ShippingProvider {
     public static final String TRACKING_CODE = "STUB123456789BR";
     public static final BigDecimal PRECO_PAC = new BigDecimal("25.90");
     public static final String ME_ORDER_PREFIX = "stub-me-order-";
+    public static final String LINK_IMPRESSAO_PREFIX = "https://stub.melhorenvio/imprimir/";
 
     private final List<EtiquetaRequest> carrinhos = new CopyOnWriteArrayList<>();
     private final List<String> compras = new CopyOnWriteArrayList<>();
@@ -39,6 +41,9 @@ public class StubShippingProvider implements ShippingProvider {
     private final Map<String, SituacaoEtiqueta> situacoesForcadas = new ConcurrentHashMap<>();
     private volatile boolean falharNaConsulta;
     private volatile boolean cobrarMasPerderResposta;
+    private final List<String> geracoes = new CopyOnWriteArrayList<>();
+    private volatile boolean recusarGeracao;
+    private volatile boolean falharNaGeracaoSemResposta;
 
     @Override
     public List<ShippingQuote> quote(ShippingQuoteRequest request) {
@@ -79,6 +84,24 @@ public class StubShippingProvider implements ShippingProvider {
     }
 
     @Override
+    public void gerarEtiqueta(String meOrderId) {
+        transacaoAtivaNasChamadas.add(TransactionSynchronizationManager.isActualTransactionActive());
+        if (recusarGeracao) {
+            throw new GeracaoRecusadaException("stub: CPF do destinatario invalido");
+        }
+        if (falharNaGeracaoSemResposta) {
+            throw new ResourceAccessException("stub: timeout ao gerar (nao se sabe se gerou)");
+        }
+        geracoes.add(meOrderId);
+    }
+
+    @Override
+    public String linkImpressao(String meOrderId) {
+        transacaoAtivaNasChamadas.add(TransactionSynchronizationManager.isActualTransactionActive());
+        return LINK_IMPRESSAO_PREFIX + meOrderId;
+    }
+
+    @Override
     public SituacaoEtiqueta consultarSituacao(String meOrderId) {
         transacaoAtivaNasChamadas.add(TransactionSynchronizationManager.isActualTransactionActive());
         consultas.add(meOrderId);
@@ -88,6 +111,9 @@ public class StubShippingProvider implements ShippingProvider {
         SituacaoEtiqueta forcada = situacoesForcadas.get(meOrderId);
         if (forcada != null) {
             return forcada;
+        }
+        if (geracoes.contains(meOrderId)) {
+            return SituacaoEtiqueta.GERADA;
         }
         return compras.contains(meOrderId) ? SituacaoEtiqueta.PAGA : SituacaoEtiqueta.PENDENTE_NO_CARRINHO;
     }
@@ -109,6 +135,9 @@ public class StubShippingProvider implements ShippingProvider {
         situacoesForcadas.clear();
         falharNaConsulta = false;
         cobrarMasPerderResposta = false;
+        geracoes.clear();
+        recusarGeracao = false;
+        falharNaGeracaoSemResposta = false;
     }
 
     public void falharNoCarrinho(boolean falhar) { this.falharNoCarrinho = falhar; }
@@ -122,4 +151,7 @@ public class StubShippingProvider implements ShippingProvider {
     public void cobrarMasPerderResposta(boolean ativo) { this.cobrarMasPerderResposta = ativo; }
     public void situacao(String meOrderId, SituacaoEtiqueta situacao) { situacoesForcadas.put(meOrderId, situacao); }
     public List<String> consultas() { return consultas; }
+    public List<String> geracoes() { return geracoes; }
+    public void recusarGeracao(boolean recusar) { this.recusarGeracao = recusar; }
+    public void falharNaGeracaoSemResposta(boolean falhar) { this.falharNaGeracaoSemResposta = falhar; }
 }

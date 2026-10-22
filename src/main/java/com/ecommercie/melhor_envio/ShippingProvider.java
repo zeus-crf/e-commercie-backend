@@ -17,6 +17,15 @@ public interface ShippingProvider {
     /** Compra a etiqueta do item (COBRA o saldo do ME). */
     void finalizarCompra(String meOrderId);
 
+    /**
+     * Gera a etiqueta ja paga (avisa a transportadora). Lanca GeracaoRecusadaException se o ME recusar;
+     * RestClientException se nao houver resposta (nao da para saber se gerou).
+     */
+    void gerarEtiqueta(String meOrderId);
+
+    /** Link privado de impressao da etiqueta ja gerada. Nao cobra nem muda nada no ME. */
+    String linkImpressao(String meOrderId);
+
     void cancelLabel(Shipment shipment);
 
     SituacaoEtiqueta consultarSituacao(String meOrderId);

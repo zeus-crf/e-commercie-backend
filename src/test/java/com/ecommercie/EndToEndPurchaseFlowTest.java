@@ -26,6 +26,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 
+
 import static com.ecommercie.pedido.models.StatusOrder.AGUARDANDO_PAGAMENTO;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.*;
@@ -34,6 +35,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -147,7 +149,7 @@ public class EndToEndPurchaseFlowTest {
                 .containsExactlyInAnyOrder(
                         OutboxTypes.EMAIL_CONFIRMACAO_PEDIDO, OutboxTypes.FISCAL_EMISSAO);
 
-        // 7. ETIQUETA — admin gera; o stub leva o pedido ate ENVIADO
+        // 7. ETIQUETA — admin paga e gera num clique; o pedido segue EM_SEPARACAO, sem e-mail
         mockMvc.perform(post("/api/v1/admin/orders/" + orderId + "/label").cookie(admin))
                 .andExpect(status().is2xxSuccessful());
 
@@ -155,10 +157,17 @@ public class EndToEndPurchaseFlowTest {
         assertThat(shippimentRepository.findAll()).singleElement().satisfies(envio -> {
             assertThat(envio.getMeOrderId()).isEqualTo(StubShippingProvider.ME_ORDER_PREFIX + orderId);
             assertThat(envio.getServiceId()).isEqualTo(2);
-            assertThat(envio.getLabelGeneratedAt()).isNotNull();
+            assertThat(envio.getEtiquetaPagaEm()).isNotNull();
+            assertThat(envio.getEtiquetaGeradaEm()).isNotNull();
         });
         assertThat(outboxEventRepository.findAll()).extracting(ev -> ev.getType())
                 .doesNotContain(OutboxTypes.EMAIL_PEDIDO_ENVIADO);
+
+        // o dono pega o link de impressao (privado: abre logado no ME)
+        mockMvc.perform(get("/api/v1/admin/orders/" + orderId + "/label/print").cookie(admin))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.url").value(
+                        StubShippingProvider.LINK_IMPRESSAO_PREFIX + StubShippingProvider.ME_ORDER_PREFIX + orderId));
 
         // 8. POSTAGEM — o ME avisa "posted": agora sim ENVIADO, e o e-mail leva o rastreio
         dispararTracking(orderId, "posted");

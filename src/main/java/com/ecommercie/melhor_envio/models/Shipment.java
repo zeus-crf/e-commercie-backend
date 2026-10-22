@@ -39,9 +39,6 @@ public class Shipment extends BaseEntity {
     @Column(name = "price", precision = 12, scale = 2)
     private BigDecimal price;
 
-    @Column(name = "label_generated_at")
-    private LocalDateTime labelGeneratedAt;
-
     @Column(name = "posted_at")
     private LocalDateTime postedAt;
 
@@ -51,4 +48,12 @@ public class Shipment extends BaseEntity {
     // quando uma requisicao reservou a compra desta etiqueta no ME (bloqueia clique duplo)
     @Column(name = "checkout_iniciado_em")
     private LocalDateTime checkoutIniciadoEm;
+
+    // quando o ME cobrou a etiqueta (checkout). NULL = envio pendente (item no carrinho do ME)
+    @Column(name = "etiqueta_paga_em")
+    private LocalDateTime etiquetaPagaEm;
+
+    // quando o ME gerou a etiqueta (transportadora avisada, pronta para imprimir)
+    @Column(name = "etiqueta_gerada_em")
+    private LocalDateTime etiquetaGeradaEm;
 }

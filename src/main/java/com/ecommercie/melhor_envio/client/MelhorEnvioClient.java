@@ -1,5 +1,6 @@
 package com.ecommercie.melhor_envio.client;
 
+import com.ecommercie.melhor_envio.GeracaoRecusadaException;
 import com.ecommercie.melhor_envio.ShippingProvider;
 import com.ecommercie.melhor_envio.dto.*;
 import com.ecommercie.melhor_envio.enums.SituacaoEtiqueta;
@@ -7,6 +8,7 @@ import com.ecommercie.melhor_envio.models.Shipment;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.MediaType;
@@ -16,6 +18,7 @@ import org.springframework.web.client.RestClient;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Adapter HTTP do Melhor Envio. So monta os payloads e chama a API: nao le nem grava no banco
@@ -31,17 +34,22 @@ public class MelhorEnvioClient implements ShippingProvider {
     private final RestClient restClient;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
+    @Autowired
     public MelhorEnvioClient(
             @Value("${melhorenvio.base-url}") String baseUrl,
             @Value("${melhorenvio.token}") String token,
             @Value("${melhorenvio.user-agent}") String userAgent
     ) {
-        this.restClient = RestClient.builder()
+        this(RestClient.builder()
                 .baseUrl(baseUrl)
                 .defaultHeader("Authorization", token)
                 .defaultHeader("User-Agent", userAgent)
-                .defaultHeader("Accept", "application/json")
-                .build();
+                .defaultHeader("Accept", "application/json"));
+    }
+
+    // usado no teste unitario, com o MockRestServiceServer ligado ao builder
+    MelhorEnvioClient(RestClient.Builder builder) {
+        this.restClient = builder.build();
     }
 
     public static SituacaoEtiqueta situacaoDo(MeOrderResponse item) {
@@ -50,6 +58,9 @@ public class MelhorEnvioClient implements ShippingProvider {
         }
         if (item.canceledAt() != null || item.expiredAt() != null) {
             return SituacaoEtiqueta.CANCELADA;
+        }
+        if (item.generatedAt() != null) {
+            return SituacaoEtiqueta.GERADA;
         }
         if (item.paidAt() != null){
             return SituacaoEtiqueta.PAGA;
@@ -150,6 +161,47 @@ public class MelhorEnvioClient implements ShippingProvider {
                 .body(new MeCheckoutRequest(List.of(meOrderId)))
                 .retrieve()
                 .toBodilessEntity();
+    }
+
+    /**
+     * Formato real (sandbox, 2026-10-12), diferente do exemplo da doc:
+     *   200 {"generate_key": "...", "<id>": {"message": "Envio encaminhado para geração", "status": true}}
+     *   204 sem corpo quando a geração deste item já tinha sido pedida (retry)
+     * A geração é assíncrona: logo depois, a consulta ainda mostra generated_at nulo.
+     */
+    @Override
+    public void gerarEtiqueta(String meOrderId) {
+        Map<String, Object> resposta;
+        try {
+            resposta = restClient.post()
+                    .uri("/api/v2/me/shipment/generate")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(new MeCheckoutRequest(List.of(meOrderId)))   // mesmo corpo do checkout: {"orders": [...]}
+                    .retrieve()
+                    .body(new ParameterizedTypeReference<Map<String, Object>>() {});
+        } catch (HttpClientErrorException e) {
+            throw new GeracaoRecusadaException(e.getResponseBodyAsString());
+        }
+        if (resposta == null) {
+            return;   // 204: geração já pedida antes
+        }
+        if (!(resposta.get(meOrderId) instanceof Map<?, ?> resultado)) {
+            throw new GeracaoRecusadaException("o Melhor Envio não devolveu o resultado da etiqueta " + meOrderId);
+        }
+        if (!Boolean.TRUE.equals(resultado.get("status"))) {
+            throw new GeracaoRecusadaException(String.valueOf(resultado.get("message")));
+        }
+    }
+
+    @Override
+    public String linkImpressao(String meOrderId) {
+        MePrintResponse resposta = restClient.post()
+                .uri("/api/v2/me/shipment/print")
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(new MePrintRequest("private", List.of(meOrderId)))
+                .retrieve()
+                .body(MePrintResponse.class);
+        return resposta.url();
     }
 
     @Override

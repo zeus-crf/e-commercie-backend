@@ -35,13 +35,23 @@ import org.springframework.http.MediaType;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
+import com.ecommercie.fiscal.PoliticaFiscal;
+import com.ecommercie.fiscal.enums.FiscalDocumentType;
+import com.ecommercie.fiscal.enums.InvoiceStatus;
+import com.ecommercie.fiscal.model.Invoice;
+import com.ecommercie.fiscal.repository.InvoiceRepository;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
+import static org.assertj.core.api.Assertions.as;
+import static org.mockito.Mockito.when;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.tuple;
+import static org.hamcrest.Matchers.containsString;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
@@ -66,6 +76,8 @@ class ShippingFlowTest {
     @Autowired PasswordEncoder passwordEncoder;
     @Autowired DatabaseCleaner databaseCleaner;
     @Autowired StubShippingProvider shippingStub;
+    @Autowired InvoiceRepository invoiceRepository;
+    @MockitoBean PoliticaFiscal politicaFiscal;   // padrao do mock: false = fiscal desligado, como nos outros testes
 
     private static final String ENDERECO = """
             { "logradouro":"Rua A","numero":"10","bairro":"Centro","cidade":"Sao Paulo","uf":"SP","cep":"01000000","serviceId":2,"valorFrete":15.00 }
@@ -79,7 +91,7 @@ class ShippingFlowTest {
     // ----------------- etiqueta -----------------
 
     @Test
-    void gerarEtiqueta_pagaEtiqueta_pedidoSegueEmSeparacao_semAvisarCliente() throws Exception {
+    void gerarEtiqueta_pagaEGeraNumCliqueSo_pedidoSegueEmSeparacao() throws Exception {
         String orderId = pedidoPago();
 
         mockMvc.perform(post("/api/v1/admin/orders/{id}/label", orderId).cookie(adminCookie()))
@@ -89,7 +101,9 @@ class ShippingFlowTest {
         assertThat(shippimentRepository.findAll()).singleElement().satisfies(envio -> {
             assertThat(envio.getMeOrderId()).isEqualTo(StubShippingProvider.ME_ORDER_PREFIX + orderId);
             assertThat(envio.getServiceId()).isEqualTo(2);
-            assertThat(envio.getLabelGeneratedAt()).isNotNull();
+            assertThat(envio.getEtiquetaGeradaEm()).isNotNull();
+            assertThat(shippingStub.geracoes()).containsExactly(StubShippingProvider.ME_ORDER_PREFIX + orderId);
+
         });
 
         // o client recebeu um snapshot com os dados do pedido
@@ -132,8 +146,8 @@ class ShippingFlowTest {
         mockMvc.perform(post("/api/v1/admin/orders/{id}/label", orderId).cookie(adminCookie()))
                 .andExpect(status().isOk());
 
-        // carrinho + compra: nenhuma das duas chamadas HTTP pode segurar transacao do banco
-        assertThat(shippingStub.transacaoAtivaNasChamadas()).containsExactly(false, false);
+        // carrinho + compra + geracao: nenhuma das chamadas HTTP pode segurar transacao do banco
+        assertThat(shippingStub.transacaoAtivaNasChamadas()).containsExactly(false, false, false);
     }
 
 
@@ -218,7 +232,7 @@ class ShippingFlowTest {
                 .andExpect(status().isConflict());
 
         assertThat(shippimentRepository.findAll()).singleElement().satisfies(envio -> {
-            assertThat(envio.getLabelGeneratedAt()).isNull();
+            assertThat(envio.getEtiquetaPagaEm()).isNull();
             assertThat(envio.getCheckoutIniciadoEm()).isNotNull();
         });
 
@@ -254,7 +268,7 @@ class ShippingFlowTest {
     }
 
     @Test
-    void gerarEtiqueta_etiquetaJaPaga_recusaSemChamarOMelhorEnvio() throws Exception {
+    void gerarEtiqueta_etiquetaJaGerada_recusaSemChamarOMelhorEnvio() throws Exception {
         String orderId = pedidoPago();
         Cookie admin = adminCookie();
 
@@ -262,11 +276,13 @@ class ShippingFlowTest {
                 .andExpect(status().isOk());
 
         mockMvc.perform(post("/api/v1/admin/orders/{id}/label", orderId).cookie(admin))
-                .andExpect(status().isUnprocessableEntity());
+                        .andExpect(status().isUnprocessableEntity())
+                                .andExpect(jsonPath("$.message").value(containsString("já foi gerada")));
 
         assertThat(shippingStub.carrinhos()).hasSize(1);
         assertThat(shippingStub.compras()).hasSize(1);
         assertThat(shippimentRepository.findAll()).hasSize(1);
+        assertThat(shippingStub.geracoes()).hasSize(1);
     }
 
     // ----------------- rastreio -----------------
@@ -360,7 +376,7 @@ class ShippingFlowTest {
         assertThat(shippingStub.compras()).containsExactly(StubShippingProvider.ME_ORDER_PREFIX + orderId);
         assertThat(shippimentRepository.findAll()).singleElement().satisfies(envio -> {
             assertThat(envio.getMeOrderId()).isEqualTo(StubShippingProvider.ME_ORDER_PREFIX + orderId);
-            assertThat(envio.getLabelGeneratedAt()).isNotNull();
+            assertThat(envio.getEtiquetaPagaEm()).isNotNull();
         });
     }
 
@@ -449,6 +465,154 @@ class ShippingFlowTest {
                 .satisfies(ev -> assertThat(ev.getPayload()).contains("BR123"));
     }
 
+    @Test
+    void geracaoSemResposta_etiquetaFicaPaga_eORetrySoGera() throws Exception {
+        String orderId = pedidoPago();
+        Cookie admin = adminCookie();
+        String meOrderId  = StubShippingProvider.ME_ORDER_PREFIX + orderId;
+        shippingStub.falharNaGeracaoSemResposta(true);
+
+        mockMvc.perform(post("/api/v1/admin/orders/{id}/label", orderId).cookie(admin))
+                .andExpect(status().isConflict());
+
+        assertThat(shippimentRepository.findByOrderId(orderId).orElseThrow()).satisfies(envio -> {
+            assertThat(envio.getEtiquetaGeradaEm()).isNull();
+            assertThat(envio.getEtiquetaPagaEm()).isNotNull();
+        });
+
+        shippingStub.falharNaGeracaoSemResposta(false);
+        mockMvc.perform(post("/api/v1/admin/orders/{id}/label", orderId).cookie(admin))
+                .andExpect(status().isOk());
+
+        assertThat(shippingStub.carrinhos()).hasSize(1);
+        assertThat(shippingStub.compras()).containsExactly(meOrderId);
+        assertThat(shippingStub.consultas()).containsExactly(meOrderId);
+        assertThat(shippingStub.geracoes()).containsExactly(meOrderId);
+        assertEtiquetaPagaAguardandoPostagem(orderId);
+    }
+
+    @Test
+    void geracaoRecusadaPeloMe_422ComOMotivo_eORetrySoGera() throws Exception {
+        String orderId = pedidoPago();
+        Cookie admin = adminCookie();
+        String meOrderId = StubShippingProvider.ME_ORDER_PREFIX + orderId;
+
+        shippingStub.recusarGeracao(true);
+
+
+        mockMvc.perform(post("/api/v1/admin/orders/{id}/label", orderId).cookie(admin))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.message").value(containsString("CPF do destinatario invalido")));
+
+        assertThat(shippimentRepository.findByOrderId(orderId).orElseThrow().getEtiquetaGeradaEm()).isNull();
+
+        shippingStub.recusarGeracao(false);
+        mockMvc.perform(post("/api/v1/admin/orders/{id}/label", orderId).cookie(admin))
+                .andExpect(status().isOk());
+
+        assertThat(shippingStub.compras()).containsExactly(meOrderId);
+        assertThat(shippingStub.geracoes()).containsExactly(meOrderId);
+        assertEtiquetaPagaAguardandoPostagem(orderId);
+    }
+
+    @Test
+    void etiquetaPagaJaGeradaNoPainel_cliqueSoRegistraAGeracao() throws Exception {
+        String orderId = pedidoPago();
+        Order order = orderRepository.findById(orderId).orElseThrow();
+        order.markSeparando();
+        orderRepository.save(order);
+        envioPagoSemGerar(orderId, "me-gerada-no-painel");
+        shippingStub.situacao("me-gerada-no-painel", SituacaoEtiqueta.GERADA);
+
+        mockMvc.perform(post("/api/v1/admin/orders/{id}/label", orderId).cookie(adminCookie()))
+                .andExpect(status().isOk());
+
+        assertThat(shippingStub.carrinhos()).isEmpty();
+        assertThat(shippingStub.compras()).isEmpty();
+        assertThat(shippingStub.geracoes()).isEmpty();
+        assertThat(shippimentRepository.findByOrderId(orderId).orElseThrow().getEtiquetaGeradaEm()).isNotNull();
+    }
+
+    @Test
+    void fiscalLigado_semDocumentoAutorizado_recusaSemChamarOMe() throws Exception {
+        when(politicaFiscal.exigeDocumentoNaEtiqueta())
+                .thenReturn(true);
+        String orderId = pedidoPago();
+        Cookie admin = adminCookie();
+
+        mockMvc.perform(post("/api/v1/admin/orders/{id}/label", orderId).cookie(admin))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.message").value(containsString("documento fiscal")));
+
+        assertThat(shippingStub.carrinhos()).isEmpty();
+        assertThat(shippimentRepository.findAll()).isEmpty();
+        assertThat(orderRepository.findById(orderId).orElseThrow().getStatus()).isEqualTo(StatusOrder.PAGO);
+
+    }
+
+    @Test
+    void fiscalLigado_comDocumentoAutorizado_mandaAChaveParaOMe() throws Exception {
+        when(politicaFiscal.exigeDocumentoNaEtiqueta())
+                .thenReturn(true);
+        String orderId = pedidoPago();
+        Cookie admin = adminCookie();
+
+        invoiceRepository.save(Invoice.builder()
+                .order(orderRepository.findById(orderId).orElseThrow())
+                .tipo(FiscalDocumentType.DCE)
+                .chave("CHAVE-DCE-123")
+                .status(InvoiceStatus.AUTORIZADO)
+                .build());
+
+
+        mockMvc.perform(post("/api/v1/admin/orders/{id}/label", orderId).cookie(admin))
+                .andExpect(status().isOk());
+
+
+        assertThat(shippingStub.carrinhos()).singleElement()
+                .satisfies(req -> assertThat(req.documentoFiscal().chave()).isEqualTo("CHAVE-DCE-123"));
+
+    }
+
+    @Test
+    void imprimir_etiquetaGerada_devolveOLinkDoMe() throws Exception {
+        String orderId = pedidoPago();
+        Cookie admin = adminCookie();
+        mockMvc.perform(post("/api/v1/admin/orders/{id}/label", orderId).cookie(admin))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(get("/api/v1/admin/orders/{id}/label/print", orderId).cookie(admin))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.url").value(
+                        StubShippingProvider.LINK_IMPRESSAO_PREFIX + StubShippingProvider.ME_ORDER_PREFIX + orderId));
+    }
+
+    @Test
+    void imprimir_etiquetaAindaNaoGerada_recusa() throws Exception {
+        String orderId = pedidoPago();
+
+        mockMvc.perform(get("/api/v1/admin/orders/{id}/label/print", orderId).cookie(adminCookie()))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.message").value(containsString("ainda não foi gerada")));
+    }
+
+    @Test
+    void rastreioGerado_registraAGeracao_semMudarOPedido() throws Exception {
+        String orderId = pedidoPago();
+        Order order = orderRepository.findById(orderId).orElseThrow();
+
+        order.markSeparando();
+        orderRepository.save(order);
+        envioPagoSemGerar(orderId, "me-gerado");
+
+        rastreio("me-gerado", "generated");
+
+        assertThat(shippimentRepository.findByOrderId(orderId).orElseThrow().getEtiquetaGeradaEm()).isNotNull();
+        assertThat(orderRepository.findById(orderId).orElseThrow().getStatus()).isEqualTo(StatusOrder.EM_SEPARACAO);
+        assertThat(outboxEventRepository.findAll()).extracting(ov -> ov.getType())
+                .doesNotContain(OutboxTypes.EMAIL_PEDIDO_ENVIADO);
+    }
+
     // ----------------- helpers -----------------
 
     private void rastreio(String meOrderId, String statusMe) throws Exception {
@@ -461,7 +625,8 @@ class ShippingFlowTest {
 
         assertThat(orderRepository.findById(orderId).orElseThrow().getStatus())
                 .isEqualTo(StatusOrder.EM_SEPARACAO);
-        assertThat(shippimentRepository.findByOrderId(orderId).orElseThrow().getLabelGeneratedAt()).isNotNull();
+        assertThat(shippimentRepository.findByOrderId(orderId).orElseThrow().getEtiquetaPagaEm()).isNotNull();
+        assertThat(shippimentRepository.findByOrderId(orderId).orElseThrow().getEtiquetaGeradaEm()).isNotNull();
 
         assertThat(outboxEventRepository.findAll())
                 .extracting(ev -> ev.getType())
@@ -482,7 +647,18 @@ class ShippingFlowTest {
                 .order(orderRepository.findById(orderId).orElseThrow())
                 .meOrderId(meOrderId)
                 .serviceId(2)
-                .labelGeneratedAt(LocalDateTime.now())
+                        .etiquetaGeradaEm(LocalDateTime.now())
+                .etiquetaPagaEm(LocalDateTime.now())
+                .build());
+    }
+
+    /** Envio pago numa tentativa anterior cuja geracao nao terminou. */
+    private void envioPagoSemGerar(String orderId, String meOrderId) {
+        shippimentRepository.save(Shipment.builder()
+                .order(orderRepository.findById(orderId).orElseThrow())
+                .meOrderId(meOrderId)
+                .serviceId(2)
+                .etiquetaPagaEm(LocalDateTime.now())
                 .build());
     }
 
