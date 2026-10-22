@@ -211,7 +211,7 @@ Para o Melhor Envio, cadastre `https://SEU-TUNEL/api/v1/webhooks/melhorenvio` no
 do `ME_TOKEN` (painel → Integrações → Área Dev → "Novo Webhook") e use o secret desse aplicativo em
 `ME_WEBHOOK_SECRET`. Sandbox e produção têm painéis e aplicativos separados: o webhook e o secret
 precisam ser do mesmo ambiente do token. Chamadas sem assinatura válida recebem 401. No sandbox o
-status só avança depois que a etiqueta é **gerada** no painel; daí em diante muda sozinho a cada
+status só avança depois que a etiqueta é **gerada** (pelo app ou pelo painel); daí em diante muda sozinho a cada
 ~15 minutos até "entregue". O inspetor do ngrok (<http://127.0.0.1:4040>) mostra cada chamada e a resposta.
 
 ---
@@ -270,12 +270,12 @@ O módulo fiscal nasce **desligado** (`FISCAL_ENABLED=false`) e a loja funciona 
   API do MP antes de marcar o pedido como pago.
 - **Pedido aguardando postagem:** pagar a etiqueta não marca o pedido como enviado. Ele fica EM_SEPARACAO até
   o Melhor Envio avisar a postagem (webhook `posted`), e aí vira ENVIADO e o cliente recebe o e-mail com o
-  código de rastreio. Como o app ainda não gera a etiqueta, o dono precisa gerá-la e imprimi-la no painel do ME
-  para o `posted` chegar. Se o webhook não vier, o admin pode marcar o envio à mão com
+  código de rastreio. O clique de etiqueta paga e gera; o dono imprime pelo link de
+  `GET /api/v1/admin/orders/{id}/label/print` (privado: abre logado no ME). Se o webhook não vier, o admin pode marcar o envio à mão com
   `PATCH /api/v1/admin/orders/{id}/enviar`.
-- **Etiqueta paga sem PDF:** o fluxo do app para na compra (a etiqueta fica `released`, sem
-  `generated_at`); faltam as chamadas de gerar (`/shipment/generate`) e imprimir (`/shipment/print`).
-  Hoje o admin termina pelo painel do ME (ver o item acima).
+- **Etiqueta paga e não gerada:** se a geração falhar depois do pagamento, o envio fica com `etiqueta_paga_em`
+  e sem `etiqueta_gerada_em`. O próximo clique consulta o ME e **só gera** (nunca paga de novo). Etiqueta
+  cancelada no painel do ME ainda não é tratada pelo app.
 - **Etiqueta: decisão pela consulta ao ME.** Antes de pagar de novo um envio pendente, o sistema
   consulta o ME (`MelhorEnvioClient.consultarSituacao`) e decide pelas datas `paid_at`, `canceled_at` e
   `expired_at`. Uma resposta que não se encaixe vira `INDEFINIDA` e bloqueia a compra (409).
