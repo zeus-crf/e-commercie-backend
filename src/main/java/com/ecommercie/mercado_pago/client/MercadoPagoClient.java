@@ -3,8 +3,7 @@ package com.ecommercie.mercado_pago.client;
 
 import com.ecommercie.mercado_pago.PaymentGateway;
 import com.ecommercie.mercado_pago.dtos.PaymentPreference;
-import com.ecommercie.mercado_pago.dtos.RequestPreference;
-import com.ecommercie.pedido.models.Order;
+import com.ecommercie.mercado_pago.dtos.PreferenciaRequest;
 import com.mercadopago.MercadoPagoConfig;
 import com.mercadopago.client.preference.*;
 import com.mercadopago.exceptions.MPApiException;
@@ -34,30 +33,30 @@ public class MercadoPagoClient implements PaymentGateway {
     }
 
     @Override
-    public PaymentPreference  criarPreferencia(Order order, RequestPreference requestPreference) throws MPException, MPApiException {
+    public PaymentPreference criarPreferencia(PreferenciaRequest dados) throws MPException, MPApiException {
 
         try {
             PreferenceClient client = new PreferenceClient();
 
-            List<PreferenceItemRequest> itens = order.getItens().stream()
+            List<PreferenceItemRequest> itens = dados.itens().stream()
                     .map(i -> PreferenceItemRequest.builder()
-                            .id(i.getId())
-                            .title(i.getNomeProduto())
-                            .description(i.getProduct().getDescricao())
-                            .quantity(i.getQuantidade())
-                            .unitPrice(i.getPrecoUnitario())
+                            .id(i.id())
+                            .title(i.nome())
+                            .description(i.descricao())
+                            .quantity(i.quantidade())
+                            .unitPrice(i.precoUnitario())
                             .build()
                     ).toList();
 
             PreferencePayerRequest payer = PreferencePayerRequest.builder()
-                    .name(order.getUser().getNome())
-                    .email(order.getUser().getEmail())
+                    .name(dados.compradorNome())
+                    .email(dados.compradorEmail())
                     .build();
 
             PreferenceBackUrlsRequest backUrls = PreferenceBackUrlsRequest.builder()
-                    .success(requestPreference.backUrls().success())
-                    .pending(requestPreference.backUrls().pending())
-                    .failure(requestPreference.backUrls().failure())
+                    .success(dados.backUrls().success())
+                    .pending(dados.backUrls().pending())
+                    .failure(dados.backUrls().failure())
                     .build();
 
             PreferenceRequest request = PreferenceRequest.builder()
@@ -65,7 +64,7 @@ public class MercadoPagoClient implements PaymentGateway {
                     .payer(payer)
                     .backUrls(backUrls)
                     .notificationUrl(notificationUrl)
-                    .externalReference(order.getId())
+                    .externalReference(dados.orderId())
                     .build();
 
 

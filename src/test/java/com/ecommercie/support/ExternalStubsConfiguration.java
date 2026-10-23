@@ -1,6 +1,5 @@
 package com.ecommercie.support;
 
-import com.ecommercie.mercado_pago.PaymentGateway;
 import com.ecommercie.pedido.cep.ConsultaCep;
 import com.ecommercie.pedido.cep.ResultadoCep;
 import org.springframework.boot.test.context.TestConfiguration;
@@ -19,7 +18,7 @@ public class ExternalStubsConfiguration {
 
     @Bean
     @Primary
-    PaymentGateway stubPaymentGateway() {
+    StubPaymentGateway stubPaymentGateway() {
         return new StubPaymentGateway();
     }
 

@@ -9,7 +9,6 @@ import com.ecommercie.estoque.model.InventoryItem;
 import com.ecommercie.estoque.repository.InventoryItemRepository;
 import com.ecommercie.mercado_pago.PaymentGateway;
 import com.ecommercie.outbox.repository.OutboxEventRepository;
-import com.ecommercie.pedido.models.Order;
 import com.ecommercie.pedido.repository.OrderRepository;
 import com.ecommercie.pedido.service.OrderService;
 import com.ecommercie.security.models.Papel;
@@ -141,12 +140,12 @@ public class GlobalExceptionHandlerTest {
 
     @Test
     void deveRetornar_503QuandoOMercadoPagoEstaIndisponivel() throws Exception {
-        String orderId = pedidoPago();
+        String orderId = pedidoAguardandoPagamento();   // a preferencia so e criada para pedido ainda nao pago
         Cookie cli = mockMvc.perform(post("/api/v1/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"email\":\"cli@test.com\",\"senha\":\"senha123\"}"))
                 .andReturn().getResponse().getCookie("access_token");
-        when(paymentGateway.criarPreferencia(any(), any())).thenThrow(new MPException("timeout"));
+        when(paymentGateway.criarPreferencia(any())).thenThrow(new MPException("timeout"));
 
         mockMvc.perform(post("/api/v1/payments/{id}/preference", orderId).cookie(cli)
                         .contentType(MediaType.APPLICATION_JSON)
@@ -191,7 +190,7 @@ public class GlobalExceptionHandlerTest {
         return product;
     }
 
-    private String pedidoPago() throws Exception {
+    private String pedidoAguardandoPagamento() throws Exception {
         Cookie cli = clienteCookie("cli@test.com");
         Product p = produtoComEstoque("Camisa", "10", 10);
         mockMvc.perform(post("/api/v1/cart/items").cookie(cli)
@@ -202,12 +201,7 @@ public class GlobalExceptionHandlerTest {
                         .contentType(MediaType.APPLICATION_JSON).content(ENDERECO))
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();
-        String orderId = JsonPath.read(json, "$.data.order_id");
-
-        Order order = orderRepository.findById(orderId).orElseThrow();
-        order.markPaid();
-        orderRepository.save(order);
-        return orderId;
+        return JsonPath.read(json, "$.data.order_id");
     }
 
 }
