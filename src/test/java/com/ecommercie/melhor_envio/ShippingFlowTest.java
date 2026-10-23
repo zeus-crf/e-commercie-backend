@@ -42,7 +42,6 @@ import com.ecommercie.fiscal.model.Invoice;
 import com.ecommercie.fiscal.repository.InvoiceRepository;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
-import static org.assertj.core.api.Assertions.as;
 import static org.mockito.Mockito.when;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -475,7 +474,7 @@ class ShippingFlowTest {
         mockMvc.perform(post("/api/v1/admin/orders/{id}/label", orderId).cookie(admin))
                 .andExpect(status().isConflict());
 
-        assertThat(shippimentRepository.findByOrderId(orderId).orElseThrow()).satisfies(envio -> {
+        assertThat(shippimentRepository.findAtivoByOrderId(orderId).orElseThrow()).satisfies(envio -> {
             assertThat(envio.getEtiquetaGeradaEm()).isNull();
             assertThat(envio.getEtiquetaPagaEm()).isNotNull();
         });
@@ -504,7 +503,7 @@ class ShippingFlowTest {
                 .andExpect(status().isUnprocessableEntity())
                 .andExpect(jsonPath("$.message").value(containsString("CPF do destinatario invalido")));
 
-        assertThat(shippimentRepository.findByOrderId(orderId).orElseThrow().getEtiquetaGeradaEm()).isNull();
+        assertThat(shippimentRepository.findAtivoByOrderId(orderId).orElseThrow().getEtiquetaGeradaEm()).isNull();
 
         shippingStub.recusarGeracao(false);
         mockMvc.perform(post("/api/v1/admin/orders/{id}/label", orderId).cookie(admin))
@@ -530,7 +529,7 @@ class ShippingFlowTest {
         assertThat(shippingStub.carrinhos()).isEmpty();
         assertThat(shippingStub.compras()).isEmpty();
         assertThat(shippingStub.geracoes()).isEmpty();
-        assertThat(shippimentRepository.findByOrderId(orderId).orElseThrow().getEtiquetaGeradaEm()).isNotNull();
+        assertThat(shippimentRepository.findAtivoByOrderId(orderId).orElseThrow().getEtiquetaGeradaEm()).isNotNull();
     }
 
     @Test
@@ -607,7 +606,7 @@ class ShippingFlowTest {
 
         rastreio("me-gerado", "generated");
 
-        assertThat(shippimentRepository.findByOrderId(orderId).orElseThrow().getEtiquetaGeradaEm()).isNotNull();
+        assertThat(shippimentRepository.findAtivoByOrderId(orderId).orElseThrow().getEtiquetaGeradaEm()).isNotNull();
         assertThat(orderRepository.findById(orderId).orElseThrow().getStatus()).isEqualTo(StatusOrder.EM_SEPARACAO);
         assertThat(outboxEventRepository.findAll()).extracting(ov -> ov.getType())
                 .doesNotContain(OutboxTypes.EMAIL_PEDIDO_ENVIADO);
@@ -625,8 +624,8 @@ class ShippingFlowTest {
 
         assertThat(orderRepository.findById(orderId).orElseThrow().getStatus())
                 .isEqualTo(StatusOrder.EM_SEPARACAO);
-        assertThat(shippimentRepository.findByOrderId(orderId).orElseThrow().getEtiquetaPagaEm()).isNotNull();
-        assertThat(shippimentRepository.findByOrderId(orderId).orElseThrow().getEtiquetaGeradaEm()).isNotNull();
+        assertThat(shippimentRepository.findAtivoByOrderId(orderId).orElseThrow().getEtiquetaPagaEm()).isNotNull();
+        assertThat(shippimentRepository.findAtivoByOrderId(orderId).orElseThrow().getEtiquetaGeradaEm()).isNotNull();
 
         assertThat(outboxEventRepository.findAll())
                 .extracting(ev -> ev.getType())
@@ -664,7 +663,7 @@ class ShippingFlowTest {
 
     /** Simula que a janela de reserva do checkout (5 min) ja passou. */
     private void expirarReserva(String orderId) {
-        Shipment envio = shippimentRepository.findByOrderId(orderId).orElseThrow();
+        Shipment envio = shippimentRepository.findAtivoByOrderId(orderId).orElseThrow();
         envio.setCheckoutIniciadoEm(LocalDateTime.now().minusMinutes(10));
         shippimentRepository.save(envio);
     }

@@ -11,7 +11,11 @@ import java.util.Optional;
 
 public interface ShippimentRepository extends JpaRepository<Shipment, String> {
     Optional<Shipment> findByMeOrderId(String meOrderId);
-    Optional<Shipment> findByOrderId(String orderId);
+    Optional<Shipment> findByOrderIdAndEtiquetaCanceladaEmIsNull(String orderId);
+
+    default Optional<Shipment> findAtivoByOrderId(String orderId) {
+        return findByOrderIdAndEtiquetaCanceladaEmIsNull(orderId);
+    }
 
     // Reserva a compra de um envio PENDENTE: so passa se ninguem reservou ou se a reserva expirou.
     // Atomico no Postgres: um UPDATE concorrente espera o lock da linha e reavalia o WHERE.
@@ -21,6 +25,7 @@ public interface ShippimentRepository extends JpaRepository<Shipment, String> {
             WHERE s.order.id = :orderId
               AND s.etiquetaPagaEm IS NULL
               AND (s.checkoutIniciadoEm IS NULL OR s.checkoutIniciadoEm < :expiraAntesDe)
+              AND s.etiquetaCanceladaEm IS NULL
             """)
     int reservarCheckout(@Param("orderId") String orderId,
                          @Param("agora") LocalDateTime agora,
@@ -28,12 +33,24 @@ public interface ShippimentRepository extends JpaRepository<Shipment, String> {
 
     // Apaga o envio PENDENTE do pedido (o ME recusou a compra): o proximo retry monta carrinho novo
     @Modifying
-    @Query("DELETE FROM Shipment s WHERE s.order.id = :orderId AND s.etiquetaPagaEm IS NULL")
+    @Query("DELETE FROM Shipment s WHERE s.order.id = :orderId AND s.etiquetaPagaEm IS NULL AND s.etiquetaCanceladaEm IS NULL")
     int descartarPendente(@Param("orderId") String orderId);
 
 
     // Solta a reserva do checkout de um envio PENDENTE (ex.: nao deu para consultar o ME)
     @Modifying
-    @Query("UPDATE Shipment s SET s.checkoutIniciadoEm = NULL WHERE s.order.id = :orderId AND s.etiquetaPagaEm IS NULL")
+    @Query("UPDATE Shipment s SET s.checkoutIniciadoEm = NULL WHERE s.order.id = :orderId AND s.etiquetaPagaEm IS NULL AND s.etiquetaCanceladaEm IS NULL")
     int liberarReserva(@Param("orderId") String orderId);
+
+    // marca o envio ativo como cancelado; idempotente (um segundo cancelamento nao muda nada)
+    @Modifying
+    @Query("""
+            UPDATE Shipment s SET s.etiquetaCanceladaEm = :agora, s.cancelamentoMotivo = :motivo
+            WHERE s.order.id = :orderId AND s.etiquetaCanceladaEm IS NULL
+            """)
+    int marcarCancelada(@Param("orderId") String orderId,
+                        @Param("agora") LocalDateTime agora,
+                        @Param("motivo") String motivo);
+
+
 }

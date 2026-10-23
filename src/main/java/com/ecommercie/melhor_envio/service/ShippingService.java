@@ -59,7 +59,7 @@ public class ShippingService {
             throw new IllegalStateException("Só é possível gerar etiqueta para pedido pago ou em separação (status atual: " + order.getStatus() + ")");
         }
 
-        Shipment envio = shippimentRepository.findByOrderId(orderId).orElse(null);
+        Shipment envio = shippimentRepository.findAtivoByOrderId(orderId).orElse(null);
         if (envio != null && envio.getEtiquetaGeradaEm() != null) {
             throw new IllegalStateException("A etiqueta deste pedido já foi gerada. Imprima com GET /api/v1/admin/orders/"
                     + orderId + "/label/print.");
@@ -89,7 +89,7 @@ public class ShippingService {
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new EntityNotFoundException("Pedido não encontrado"));
 
-        Shipment shipment = shippimentRepository.findByOrderId(order.getId())
+        Shipment shipment = shippimentRepository.findAtivoByOrderId(order.getId())
                 .orElseThrow(() -> new IllegalStateException("Envio pendente não encontrado para o pedido " + orderId));
         shipment.setEtiquetaPagaEm(LocalDateTime.now());
         return shipment;
@@ -171,7 +171,7 @@ public class ShippingService {
 
     private Shipment registrarGeracao(String orderId) {
         return transactionTemplate.execute(tx -> {
-            Shipment envio = shippimentRepository.findByOrderId(orderId)
+            Shipment envio = shippimentRepository.findAtivoByOrderId(orderId)
                     .orElseThrow(() -> new IllegalStateException("Envio não encontrado para o pedido " + orderId));
             envio.setEtiquetaGeradaEm(LocalDateTime.now());
             return envio;
@@ -245,7 +245,7 @@ public class ShippingService {
     }
 
     public String linkImpressao(String orderId) {
-        String meOrderId = shippimentRepository.findByOrderId(orderId)
+        String meOrderId = shippimentRepository.findAtivoByOrderId(orderId)
                 .filter(envio -> envio.getEtiquetaGeradaEm() != null)
                 .map(Shipment::getMeOrderId)
                 .orElseThrow(() -> new IllegalStateException("A etiqueta deste pedido ainda não foi gerada. "
