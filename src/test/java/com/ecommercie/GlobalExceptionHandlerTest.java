@@ -7,6 +7,7 @@ import com.ecommercie.catalogo.repository.CategoryRepository;
 import com.ecommercie.catalogo.repository.ProductRepository;
 import com.ecommercie.estoque.model.InventoryItem;
 import com.ecommercie.estoque.repository.InventoryItemRepository;
+import com.ecommercie.mercado_pago.PaymentGateway;
 import com.ecommercie.outbox.repository.OutboxEventRepository;
 import com.ecommercie.pedido.models.Order;
 import com.ecommercie.pedido.repository.OrderRepository;
@@ -19,6 +20,7 @@ import com.ecommercie.support.DatabaseCleaner;
 import com.ecommercie.support.ExternalStubsConfiguration;
 import com.ecommercie.support.StubShippingProvider;
 import com.jayway.jsonpath.JsonPath;
+import com.mercadopago.exceptions.MPException;
 import jakarta.servlet.http.Cookie;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -31,6 +33,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.web.client.HttpServerErrorException;
 import org.springframework.web.client.ResourceAccessException;
@@ -39,6 +42,8 @@ import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 
 import static org.hamcrest.Matchers.containsString;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -69,6 +74,9 @@ public class GlobalExceptionHandlerTest {
     OutboxEventRepository outboxEventRepository;
     @Autowired
     StubShippingProvider shippingStub;
+
+
+    @MockitoBean PaymentGateway paymentGateway;
 
 
     private static final String ENDERECO = """
@@ -129,6 +137,24 @@ public class GlobalExceptionHandlerTest {
                         .content("{\"cepDestino\":\"01310100\",\"itens\":[]}"))
                 .andExpect(status().isBadGateway())
                 .andExpect(jsonPath("$.message").value(containsString("O serviço externo falhou: ")));
+    }
+
+    @Test
+    void deveRetornar_503QuandoOMercadoPagoEstaIndisponivel() throws Exception {
+        String orderId = pedidoPago();
+        Cookie cli = mockMvc.perform(post("/api/v1/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\":\"cli@test.com\",\"senha\":\"senha123\"}"))
+                .andReturn().getResponse().getCookie("access_token");
+        when(paymentGateway.criarPreferencia(any(), any())).thenThrow(new MPException("timeout"));
+
+        mockMvc.perform(post("/api/v1/payments/{id}/preference", orderId).cookie(cli)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"backUrls":{"success":"http://localhost/ok","failure":"http://localhost/erro","pending":"http://localhost/pendente"}}
+                                """))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(jsonPath("$.message").value("Mercado Pago indisponível. Tente novamente mais tarde."));
     }
     private Cookie adminCookie(String email) throws Exception {
         userRepository.save(User.builder()

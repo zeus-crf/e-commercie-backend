@@ -6,15 +6,20 @@ import com.ecommercie.mercado_pago.dtos.RequestPreference;
 import com.ecommercie.mercado_pago.dtos.ResponsePreference;
 import com.ecommercie.mercado_pago.service.PreferenceService;
 import com.ecommercie.shared.ApiResponse;
+import com.mercadopago.exceptions.MPApiException;
+import com.mercadopago.exceptions.MPException;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
+
+import javax.naming.ServiceUnavailableException;
 
 @RestController
 @RequestMapping("/api/v1/payments")
@@ -32,13 +37,8 @@ public class MercadoPagoController {
     @Transactional
     public ResponseEntity<ApiResponse<ResponsePreference>> criarPreferencia(
             @Valid @RequestBody RequestPreference request,
-            @PathVariable String orderId) {
-        try {
+            @PathVariable String orderId) throws MPException, MPApiException {
             PaymentPreference pref = preferenceService.criarPreferencia(request, orderId);
             return ResponseEntity.ok(ApiResponse.ok(new ResponsePreference(pref.preferenceId(), pref.redirectUrl())));
-        } catch (Exception ex) {
-            log.error("Erro ao criar preferência: {}", ex.getMessage());
-            return ResponseEntity.internalServerError().build();
-        }
     }
 }

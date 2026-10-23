@@ -1,5 +1,7 @@
 package com.ecommercie.shared;
 
+import com.mercadopago.exceptions.MPApiException;
+import com.mercadopago.exceptions.MPException;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpMethod;
@@ -138,6 +140,21 @@ public class GlobalExceptionHandler {
         log.error("Erro na API externa ({}): {}", ex.getStatusCode(), ex.getResponseBodyAsString());
         return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
                 .body(ApiResponse.error("O serviço externo falhou: " + ex.getResponseBodyAsString()));
+    }
+
+    @ExceptionHandler(MPApiException.class)
+    public ResponseEntity<ApiResponse<Void>> handleMercadoPagoApi(MPApiException ex) {
+        log.error("Mercado Pago recusou a chamada ({}): {}", ex.getStatusCode(),
+                ex.getApiResponse() != null ? ex.getApiResponse().getContent() : ex.getMessage());
+        return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
+                .body(ApiResponse.error("O Mercado Pago recusou a operação. Tente novamente ou contate o suporte."));
+    }
+
+    @ExceptionHandler(MPException.class)
+    public ResponseEntity<ApiResponse<Void>> handleMercadoPagoIndisponivel(MPException ex) {
+        log.error("Mercado Pago indisponível: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .body(ApiResponse.error("Mercado Pago indisponível. Tente novamente mais tarde."));
     }
 
     @ExceptionHandler(ConflitoException.class)
