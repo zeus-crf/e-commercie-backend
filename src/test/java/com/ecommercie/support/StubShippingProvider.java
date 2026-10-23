@@ -44,9 +44,14 @@ public class StubShippingProvider implements ShippingProvider {
     private final List<String> geracoes = new CopyOnWriteArrayList<>();
     private volatile boolean recusarGeracao;
     private volatile boolean falharNaGeracaoSemResposta;
+    private volatile RuntimeException falhaNaCotacao;
 
     @Override
     public List<ShippingQuote> quote(ShippingQuoteRequest request) {
+        RuntimeException falha = falhaNaCotacao;
+        if (falha != null) {
+            throw falha;   // ex.: ResourceAccessException (ME fora do ar) ou HttpServerErrorException (5xx do ME)
+        }
         return List.of(
                 new ShippingQuote(2, "PAC", "Correios", PRECO_PAC, 5),
                 new ShippingQuote(1, "SEDEX", "Correios", new BigDecimal("39.90"), 2)
@@ -138,6 +143,7 @@ public class StubShippingProvider implements ShippingProvider {
         geracoes.clear();
         recusarGeracao = false;
         falharNaGeracaoSemResposta = false;
+        falhaNaCotacao = null;
     }
 
     public void falharNoCarrinho(boolean falhar) { this.falharNoCarrinho = falhar; }
@@ -154,4 +160,5 @@ public class StubShippingProvider implements ShippingProvider {
     public List<String> geracoes() { return geracoes; }
     public void recusarGeracao(boolean recusar) { this.recusarGeracao = recusar; }
     public void falharNaGeracaoSemResposta(boolean falhar) { this.falharNaGeracaoSemResposta = falhar; }
+    public void falharNaCotacao(RuntimeException falha) { this.falhaNaCotacao = falha; }
 }
