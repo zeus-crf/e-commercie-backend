@@ -1,7 +1,9 @@
 package com.ecommercie.support;
 
+import com.ecommercie.melhor_envio.CancelamentoRecusadoException;
 import com.ecommercie.melhor_envio.GeracaoRecusadaException;
 import com.ecommercie.melhor_envio.ShippingProvider;
+import com.ecommercie.melhor_envio.dto.Cancelabilidade;
 import com.ecommercie.melhor_envio.dto.EtiquetaRequest;
 import com.ecommercie.melhor_envio.dto.ShippingQuote;
 import com.ecommercie.melhor_envio.dto.ShippingQuoteRequest;
@@ -45,6 +47,9 @@ public class StubShippingProvider implements ShippingProvider {
     private volatile boolean recusarGeracao;
     private volatile boolean falharNaGeracaoSemResposta;
     private volatile RuntimeException falhaNaCotacao;
+    private final List<String> cancelamentos = new CopyOnWriteArrayList<>();
+    private final Map<String, String> naoCancelaveis = new ConcurrentHashMap<>();
+    private volatile boolean recusarCancelamento;
 
     @Override
     public List<ShippingQuote> quote(ShippingQuoteRequest request) {
@@ -124,8 +129,20 @@ public class StubShippingProvider implements ShippingProvider {
     }
 
     @Override
-    public void cancelLabel(Shipment shipment) {
-        // no-op: nao ha etiqueta real para cancelar
+    public Cancelabilidade consultarCancelamento(String meOrderId) {
+        transacaoAtivaNasChamadas.add(TransactionSynchronizationManager.isActualTransactionActive());
+        String motivo = naoCancelaveis.get(meOrderId);
+        return motivo == null ? new Cancelabilidade(true, "") : new Cancelabilidade(false, motivo);
+    }
+
+
+    @Override
+    public void cancelarEtiqueta(String meOrderId, String motivo) {
+        transacaoAtivaNasChamadas.add(TransactionSynchronizationManager.isActualTransactionActive());
+        if (recusarCancelamento) {
+            throw new CancelamentoRecusadoException("stub: etiqueta ja coletada");
+        }
+        cancelamentos.add(meOrderId);
     }
 
     public void reset() {
@@ -135,7 +152,10 @@ public class StubShippingProvider implements ShippingProvider {
         falharNoCarrinho = false;
         falharNaCompra = false;
         falharNaCompraSemResposta = false;
+        cancelamentos.clear();
+        naoCancelaveis.clear();
         aoCriarCarrinho = null;
+        recusarCancelamento = false;
         consultas.clear();
         situacoesForcadas.clear();
         falharNaConsulta = false;
@@ -161,4 +181,7 @@ public class StubShippingProvider implements ShippingProvider {
     public void recusarGeracao(boolean recusar) { this.recusarGeracao = recusar; }
     public void falharNaGeracaoSemResposta(boolean falhar) { this.falharNaGeracaoSemResposta = falhar; }
     public void falharNaCotacao(RuntimeException falha) { this.falhaNaCotacao = falha; }
+    public List<String> cancelamentos() { return cancelamentos; }
+    public void naoCancelavel(String meOrderId, String motivo) { naoCancelaveis.put(meOrderId, motivo); }
+    public void recusarCancelamento(boolean recusar) { this.recusarCancelamento = recusar; }
 }

@@ -40,11 +40,12 @@ public class ShipmentTrackingService {
         }
         shipment.setTrackingStatus(event.status());
 
-        if ("generated".equals(event.status())) {
+        if ("generated".equals(event.status()) && shipment.getEtiquetaGeradaEm() == null) {
+            // gerada pelo painel do ME (ou a resposta do generate se perdeu); reenvio do webhook nao muda a data
             shipment.setEtiquetaGeradaEm(LocalDateTime.now());
         }
 
-        if(("cancelled".equals(event.status()) || "canceled".equals(event.status())) && shipment.getEtiquetaCanceladaEm() == null) {
+        if (("cancelled".equals(event.status()) || "canceled".equals(event.status())) && shipment.getEtiquetaCanceladaEm() == null) {
             // cancelada pelo painel do ME: o envio vira historico; o pedido nao muda
             shipment.setEtiquetaCanceladaEm(LocalDateTime.now());
             shipment.setCancelamentoMotivo("Cancelada no Melhor Envio");
