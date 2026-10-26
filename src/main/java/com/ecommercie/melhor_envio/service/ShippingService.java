@@ -195,8 +195,12 @@ public class ShippingService {
         return switch (situacao) {
             case GERADA -> registrarGeracao(orderId);
             case PAGA -> gerar(orderId, meOrderId);
-            case CANCELADA -> throw new IllegalStateException("A etiqueta deste pedido foi cancelada no Melhor Envio. "
-                    + "O app ainda não trata cancelamento: resolva pelo painel do ME.");
+            case CANCELADA -> {
+                transactionTemplate.executeWithoutResult(tx ->
+                        shippimentRepository.marcarCancelada(orderId, LocalDateTime.now(), "Cancelada no Melhor Envio"));
+                throw new IllegalStateException("A etiqueta deste pedido foi cancelada no Melhor Envio. "
+                        + "Clique de novo para gerar uma nova (ela será paga outra vez).");
+            }
             default -> throw new ConflitoException("Não foi possível confirmar no Melhor Envio a situação da etiqueta deste pedido. "
                     + "Tente de novo em instantes ou confira no painel do ME.");
         };

@@ -713,6 +713,46 @@ class ShippingFlowTest {
                 .andExpect(jsonPath("$.message").value(containsString("não tem etiqueta paga")));
     }
 
+    @Test
+    void rastreioCancelado_marcaEnvioCancelado_eOPedidoSegueEmSeparacao() throws Exception {
+        String orderId = pedidoPago();
+        Order order = orderRepository.findById(orderId).orElseThrow();
+        order.markSeparando();
+        orderRepository.save(order);
+        envioPagoSemGerar(orderId, "me-cancelada-no-painel");
+
+        rastreio("me-cancelada-no-painel", "cancelled");
+
+        assertThat(shippimentRepository.findAll()).singleElement().satisfies(envio -> {
+            assertThat(envio.getEtiquetaCanceladaEm()).isNotNull();
+            assertThat(orderRepository.findById(orderId).orElseThrow().getStatus()).isEqualTo(StatusOrder.EM_SEPARACAO);
+        });
+    }
+
+    @Test
+    void retomadaEncontraCanceladaNoMe_registraCancelamento_eOProximoCliqueGeraOutra() throws Exception {
+        String orderId = pedidoPago();
+        Order order = orderRepository.findById(orderId).orElseThrow();
+        order.markSeparando();
+        orderRepository.save(order);
+        envioPagoSemGerar(orderId, "me-cancelada");
+        shippingStub.situacao("me-cancelada", SituacaoEtiqueta.CANCELADA);
+        Cookie admin = adminCookie();
+
+        mockMvc.perform(post("/api/v1/admin/orders/{id}/label", orderId).cookie(admin))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.message").value(containsString("Clique de novo")));
+
+        assertThat(shippimentRepository.findAtivoByOrderId(orderId)).isEmpty();
+
+        mockMvc.perform(post("/api/v1/admin/orders/{id}/label", orderId).cookie(admin))
+                .andExpect(status().isOk());
+
+        assertThat(shippingStub.carrinhos()).hasSize(1);
+        assertThat(shippimentRepository.findAll()).hasSize(2);
+
+    }
+
     // ----------------- helpers -----------------
 
     private void rastreio(String meOrderId, String statusMe) throws Exception {

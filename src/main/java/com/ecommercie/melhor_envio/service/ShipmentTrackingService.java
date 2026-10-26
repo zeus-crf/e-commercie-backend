@@ -44,6 +44,13 @@ public class ShipmentTrackingService {
             shipment.setEtiquetaGeradaEm(LocalDateTime.now());
         }
 
+        if(("cancelled".equals(event.status()) || "canceled".equals(event.status())) && shipment.getEtiquetaCanceladaEm() == null) {
+            // cancelada pelo painel do ME: o envio vira historico; o pedido nao muda
+            shipment.setEtiquetaCanceladaEm(LocalDateTime.now());
+            shipment.setCancelamentoMotivo("Cancelada no Melhor Envio");
+        }
+
+
         if ("posted".equals(event.status())) {
             shipment.setPostedAt(LocalDateTime.now());
             Order order = shipment.getOrder();
