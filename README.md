@@ -275,7 +275,12 @@ O módulo fiscal nasce **desligado** (`FISCAL_ENABLED=false`) e a loja funciona 
   `PATCH /api/v1/admin/orders/{id}/enviar`.
 - **Etiqueta paga e não gerada:** se a geração falhar depois do pagamento, o envio fica com `etiqueta_paga_em`
   e sem `etiqueta_gerada_em`. O próximo clique consulta o ME e **só gera** (nunca paga de novo). Etiqueta
-  cancelada no painel do ME ainda não é tratada pelo app.
+  cancelada no painel do ME é registrada (webhook `cancelled` ou o próximo clique) e o pedido pode receber outra.
+- **Cancelar etiqueta:** `POST /api/v1/admin/orders/{id}/label/cancel` (corpo opcional `{"motivo": "..."}`) cancela a
+  etiqueta paga (gerada ou não) de um pedido em separação, se o ME ainda permitir (`/shipment/cancellable`). O envio
+  cancelado fica como histórico (`etiqueta_cancelada_em`, `cancelamento_motivo`) e o pedido recebe uma nova etiqueta pelo
+  `POST /label`. Depois da geração, o valor volta ao saldo do ME em até 12 h. Não cancela depois da postagem nem estorna
+  o frete ao cliente. No sandbox, as etiquetas geradas respondem `cancellable: false`.
 - **Etiqueta: decisão pela consulta ao ME.** Antes de pagar de novo um envio pendente, o sistema
   consulta o ME (`MelhorEnvioClient.consultarSituacao`) e decide pelas datas `paid_at`, `canceled_at` e
   `expired_at`. Uma resposta que não se encaixe vira `INDEFINIDA` e bloqueia a compra (409).
