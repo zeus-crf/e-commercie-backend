@@ -42,6 +42,7 @@ import com.ecommercie.fiscal.model.Invoice;
 import com.ecommercie.fiscal.repository.InvoiceRepository;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
+import static org.mockito.ArgumentMatchers.isNotNull;
 import static org.mockito.Mockito.when;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -610,6 +611,106 @@ class ShippingFlowTest {
         assertThat(orderRepository.findById(orderId).orElseThrow().getStatus()).isEqualTo(StatusOrder.EM_SEPARACAO);
         assertThat(outboxEventRepository.findAll()).extracting(ov -> ov.getType())
                 .doesNotContain(OutboxTypes.EMAIL_PEDIDO_ENVIADO);
+    }
+
+    @Test
+    void cancelarEtiqueta_pagaENaoGerada_tambemCancela() throws Exception {
+        String orderId = pedidoPago();
+        Order order = orderRepository.findById(orderId).orElseThrow();
+        order.markSeparando();
+        orderRepository.save(order);
+        envioPagoSemGerar(orderId, "me-paga-sem-gerar");
+
+        mockMvc.perform(post("/api/v1/admin/orders/{id}/label/cancel", orderId).cookie(adminCookie()))
+                .andExpect(status().isOk());
+
+        assertThat(shippingStub.cancelamentos()).containsExactly("me-paga-sem-gerar");
+        assertThat(shippimentRepository.findAll()).singleElement()
+                .satisfies(envio -> assertThat(envio.getEtiquetaCanceladaEm()).isNotNull());
+    }
+
+    @Test
+    void cancelarEtiqueta_marcaCancelada_eOPedidoPodeReceberOutra() throws Exception {
+        String orderId = pedidoPago();
+        Cookie admin = adminCookie();
+        String meOrderId = StubShippingProvider.ME_ORDER_PREFIX + orderId;
+
+        mockMvc.perform(post("/api/v1/admin/orders/{id}/label", orderId).cookie(admin))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(post("/api/v1/admin/orders/{id}/label/cancel", orderId).cookie(admin)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"motivo\":\"Endereço errado\"}"))
+                .andExpect(status().isOk());
+
+        assertThat(shippingStub.cancelamentos()).containsExactly(meOrderId);
+        assertThat(shippimentRepository.findAll()).singleElement().satisfies(envio -> {
+            assertThat(envio.getEtiquetaCanceladaEm()).isNotNull();
+            assertThat(envio.getCancelamentoMotivo()).isEqualTo("Endereço errado");
+        });
+        assertThat(orderRepository.findById(orderId).orElseThrow().getStatus()).isEqualTo(StatusOrder.EM_SEPARACAO);
+
+
+        // o pedido recebe uma etiqueta nova: o envio cancelado fica como historico
+        mockMvc.perform(post("/api/v1/admin/orders/{id}/label", orderId).cookie(admin)).andExpect(status().isOk());
+        assertThat(shippingStub.carrinhos()).hasSize(2);
+        assertThat(shippimentRepository.findAll()).hasSize(2);
+        assertThat(shippimentRepository.findAtivoByOrderId(orderId).orElseThrow().getEtiquetaGeradaEm()).isNotNull();
+    }
+
+    @Test
+    void cancelarEtiqueta_meNaoPermite_422ComOMotivo_semCancelar() throws Exception {
+        String orderId = pedidoPago();
+        Cookie admin = adminCookie();
+        mockMvc.perform(post("/api/v1/admin/orders/{id}/label", orderId).cookie(admin)).andExpect(status().isOk());
+        shippingStub.naoCancelavel(StubShippingProvider.ME_ORDER_PREFIX + orderId, "Coleta já agendada");
+
+        mockMvc.perform(post("/api/v1/admin/orders/{id}/label/cancel", orderId).cookie(admin))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.message").value(containsString("Coleta já agendada")));
+
+        assertThat(shippingStub.cancelamentos()).isEmpty();
+        assertThat(shippimentRepository.findAtivoByOrderId(orderId)).isPresent();
+    }
+
+    @Test
+    void cancelarEtiqueta_meRecusa_422_semMarcarCancelada() throws Exception {
+        String orderId = pedidoPago();
+        Cookie admin = adminCookie();
+        mockMvc.perform(post("/api/v1/admin/orders/{id}/label", orderId).cookie(admin)).andExpect(status().isOk());
+        shippingStub.recusarCancelamento(true);
+
+        mockMvc.perform(post("/api/v1/admin/orders/{id}/label/cancel", orderId).cookie(admin))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.message").value(containsString("etiqueta ja coletada")));
+
+        assertThat(shippimentRepository.findAtivoByOrderId(orderId)).isPresent();
+    }
+
+
+    @Test
+    void cancelarEtiqueta_pedidoJaEnviado_422_semChamarOMe() throws Exception {
+        String orderId = pedidoPago();
+        Cookie admin = adminCookie();
+        mockMvc.perform(post("/api/v1/admin/orders/{id}/label", orderId).cookie(admin)).andExpect(status().isOk());
+        rastreio(StubShippingProvider.ME_ORDER_PREFIX + orderId, "posted");
+
+        mockMvc.perform(post("/api/v1/admin/orders/{id}/label/cancel", orderId).cookie(admin))
+                .andExpect(status().isUnprocessableEntity());
+
+        assertThat(shippingStub.cancelamentos()).isEmpty();
+    }
+
+    @Test
+    void cancelarEtiqueta_semEtiquetaPaga_422() throws Exception {
+        String orderId = pedidoPago();
+        Order order = orderRepository.findById(orderId).orElseThrow();
+        order.markSeparando();
+        orderRepository.save(order);
+
+        mockMvc.perform(post("/api/v1/admin/orders/{id}/label/cancel", orderId).cookie(adminCookie()))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.message").value(containsString("não tem etiqueta paga")));
     }
 
     // ----------------- helpers -----------------

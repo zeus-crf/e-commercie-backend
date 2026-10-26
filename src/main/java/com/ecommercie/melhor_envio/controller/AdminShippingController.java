@@ -1,6 +1,7 @@
 package com.ecommercie.melhor_envio.controller;
 
 import com.ecommercie.config.OpenApiConfig;
+import com.ecommercie.melhor_envio.dto.CancelarEtiquetaRequest;
 import com.ecommercie.melhor_envio.dto.ImpressaoEtiquetaResponse;
 import com.ecommercie.melhor_envio.service.ShippingService;
 import com.ecommercie.shared.ApiResponse;
@@ -33,4 +34,13 @@ public class AdminShippingController {
     public ResponseEntity<ApiResponse<ImpressaoEtiquetaResponse>> gerarImpressao(@PathVariable String id) {
         return ResponseEntity.ok(ApiResponse.ok("Impressão gerada com sucesso ", new ImpressaoEtiquetaResponse(shippingService.linkImpressao(id))));
     }
-}
+
+    @Operation(summary = "Cancela a etiqueta paga de um pedido em separação (o valor volta ao saldo do ME)")
+    @PostMapping("/{id}/label/cancel")
+    public ResponseEntity<ApiResponse<Void>> cancelarEtiqueta(@PathVariable String id,
+                                                              @RequestBody(required = false) CancelarEtiquetaRequest request) {
+        shippingService.cancelarEtiqueta(id, request == null ? null : request.motivo());
+        return ResponseEntity.ok(ApiResponse.ok("Etiqueta cancelada no Melhor Envio. Se já tinha sido gerada, o valor volta "
+                + "ao saldo do ME em até 12 h. Gere uma nova com POST /api/v1/admin/orders/" + id + "/label", null));
+     }
+    }

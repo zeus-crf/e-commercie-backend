@@ -4,7 +4,9 @@ import com.ecommercie.fiscal.PoliticaFiscal;
 import com.ecommercie.fiscal.enums.InvoiceStatus;
 import com.ecommercie.fiscal.model.Invoice;
 import com.ecommercie.fiscal.service.FiscalService;
+import com.ecommercie.melhor_envio.CancelamentoRecusadoException;
 import com.ecommercie.melhor_envio.ShippingProvider;
+import com.ecommercie.melhor_envio.dto.Cancelabilidade;
 import com.ecommercie.melhor_envio.dto.EtiquetaRequest;
 import com.ecommercie.melhor_envio.dto.ShippingQuote;
 import com.ecommercie.melhor_envio.dto.ShippingQuoteRequest;
@@ -43,6 +45,7 @@ public class ShippingService {
     private final TransactionTemplate transactionTemplate;
     static final Duration JANELA_CHECKOUT = Duration.ofMinutes(5);
     private final PoliticaFiscal politicaFiscal;
+    private static final String MOTIVO_PADRAO_CANCELAMENTO = "Cancelada pelo lojista";
 
     public List<ShippingQuote> quote(ShippingQuoteRequest request){
         return shippingProvider.quote(request);
@@ -254,4 +257,41 @@ public class ShippingService {
     }
 
     private record Preparo(EtiquetaRequest request, String meOrderIdPendente, String meOrderIdPagoSemGerar) {}
+
+
+    public void cancelarEtiqueta(String orderId, String motivoInformado) {
+        String motivo = motivoInformado == null || motivoInformado.isBlank() ? MOTIVO_PADRAO_CANCELAMENTO : motivoInformado;
+        String meOrderId = transactionTemplate.execute(tx -> {
+            Order order = orderRepository.findById(orderId)
+                    .orElseThrow(() -> new EntityNotFoundException("Pedido não encontrado"));
+            if (order.getStatus() != StatusOrder.EM_SEPARACAO){
+                throw  new IllegalStateException("Só é possível cancelar a etiqueta de um pedido em separação(status atual: " + order.getStatus() +
+                        "). Depois da postagem, o cancelamento é pelo painel do Melhor Envio");
+            }
+
+            return shippimentRepository.findAtivoByOrderId(orderId)
+                    .filter(envio -> envio.getEtiquetaPagaEm() != null)   // paga basta: gerada ou nao
+                    .map(Shipment::getMeOrderId)
+                    .orElseThrow(() -> new IllegalStateException("Este pedido não tem etiqueta paga para cancelar."));
+        });
+        Cancelabilidade cancelabilidade = shippingProvider.consultarCancelamento(meOrderId);
+        if (!cancelabilidade.cancelavel()) {
+            throw new IllegalStateException("O Melhor Envio não permite mais cancelar esta etiqueta"
+                    + (cancelabilidade.motivo().isBlank() ? "." : ": " + cancelabilidade.motivo()));
+        }
+        try {
+            shippingProvider.cancelarEtiqueta(meOrderId, motivo);
+        } catch (CancelamentoRecusadoException e) {
+            throw new IllegalStateException("O Melhor Envio recusou o cancelamento da etiqueta: " + e.getMessage());
+        }
+
+        transactionTemplate.executeWithoutResult(tx ->
+                shippimentRepository.marcarCancelada(orderId, LocalDateTime.now(), motivo));
+
+    }
+
+
+
+
+
 }
