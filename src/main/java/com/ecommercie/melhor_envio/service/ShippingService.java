@@ -4,7 +4,9 @@ import com.ecommercie.fiscal.PoliticaFiscal;
 import com.ecommercie.fiscal.enums.InvoiceStatus;
 import com.ecommercie.fiscal.model.Invoice;
 import com.ecommercie.fiscal.service.FiscalService;
+import com.ecommercie.melhor_envio.CancelamentoRecusadoException;
 import com.ecommercie.melhor_envio.ShippingProvider;
+import com.ecommercie.melhor_envio.dto.Cancelabilidade;
 import com.ecommercie.melhor_envio.dto.EtiquetaRequest;
 import com.ecommercie.melhor_envio.dto.ShippingQuote;
 import com.ecommercie.melhor_envio.dto.ShippingQuoteRequest;
@@ -43,6 +45,7 @@ public class ShippingService {
     private final TransactionTemplate transactionTemplate;
     static final Duration JANELA_CHECKOUT = Duration.ofMinutes(5);
     private final PoliticaFiscal politicaFiscal;
+    private static final String MOTIVO_PADRAO_CANCELAMENTO = "Cancelada pelo lojista";
 
     public List<ShippingQuote> quote(ShippingQuoteRequest request){
         return shippingProvider.quote(request);
@@ -59,7 +62,7 @@ public class ShippingService {
             throw new IllegalStateException("Só é possível gerar etiqueta para pedido pago ou em separação (status atual: " + order.getStatus() + ")");
         }
 
-        Shipment envio = shippimentRepository.findByOrderId(orderId).orElse(null);
+        Shipment envio = shippimentRepository.findAtivoByOrderId(orderId).orElse(null);
         if (envio != null && envio.getEtiquetaGeradaEm() != null) {
             throw new IllegalStateException("A etiqueta deste pedido já foi gerada. Imprima com GET /api/v1/admin/orders/"
                     + orderId + "/label/print.");
@@ -89,7 +92,7 @@ public class ShippingService {
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new EntityNotFoundException("Pedido não encontrado"));
 
-        Shipment shipment = shippimentRepository.findByOrderId(order.getId())
+        Shipment shipment = shippimentRepository.findAtivoByOrderId(order.getId())
                 .orElseThrow(() -> new IllegalStateException("Envio pendente não encontrado para o pedido " + orderId));
         shipment.setEtiquetaPagaEm(LocalDateTime.now());
         return shipment;
@@ -171,7 +174,7 @@ public class ShippingService {
 
     private Shipment registrarGeracao(String orderId) {
         return transactionTemplate.execute(tx -> {
-            Shipment envio = shippimentRepository.findByOrderId(orderId)
+            Shipment envio = shippimentRepository.findAtivoByOrderId(orderId)
                     .orElseThrow(() -> new IllegalStateException("Envio não encontrado para o pedido " + orderId));
             envio.setEtiquetaGeradaEm(LocalDateTime.now());
             return envio;
@@ -192,8 +195,12 @@ public class ShippingService {
         return switch (situacao) {
             case GERADA -> registrarGeracao(orderId);
             case PAGA -> gerar(orderId, meOrderId);
-            case CANCELADA -> throw new IllegalStateException("A etiqueta deste pedido foi cancelada no Melhor Envio. "
-                    + "O app ainda não trata cancelamento: resolva pelo painel do ME.");
+            case CANCELADA -> {
+                transactionTemplate.executeWithoutResult(tx ->
+                        shippimentRepository.marcarCancelada(orderId, LocalDateTime.now(), "Cancelada no Melhor Envio"));
+                throw new IllegalStateException("A etiqueta deste pedido foi cancelada no Melhor Envio. "
+                        + "Clique de novo para gerar uma nova (ela será paga outra vez).");
+            }
             default -> throw new ConflitoException("Não foi possível confirmar no Melhor Envio a situação da etiqueta deste pedido. "
                     + "Tente de novo em instantes ou confira no painel do ME.");
         };
@@ -245,7 +252,7 @@ public class ShippingService {
     }
 
     public String linkImpressao(String orderId) {
-        String meOrderId = shippimentRepository.findByOrderId(orderId)
+        String meOrderId = shippimentRepository.findAtivoByOrderId(orderId)
                 .filter(envio -> envio.getEtiquetaGeradaEm() != null)
                 .map(Shipment::getMeOrderId)
                 .orElseThrow(() -> new IllegalStateException("A etiqueta deste pedido ainda não foi gerada. "
@@ -254,4 +261,41 @@ public class ShippingService {
     }
 
     private record Preparo(EtiquetaRequest request, String meOrderIdPendente, String meOrderIdPagoSemGerar) {}
+
+
+    public void cancelarEtiqueta(String orderId, String motivoInformado) {
+        String motivo = motivoInformado == null || motivoInformado.isBlank() ? MOTIVO_PADRAO_CANCELAMENTO : motivoInformado;
+        String meOrderId = transactionTemplate.execute(tx -> {
+            Order order = orderRepository.findById(orderId)
+                    .orElseThrow(() -> new EntityNotFoundException("Pedido não encontrado"));
+            if (order.getStatus() != StatusOrder.EM_SEPARACAO){
+                throw  new IllegalStateException("Só é possível cancelar a etiqueta de um pedido em separação(status atual: " + order.getStatus() +
+                        "). Depois da postagem, o cancelamento é pelo painel do Melhor Envio");
+            }
+
+            return shippimentRepository.findAtivoByOrderId(orderId)
+                    .filter(envio -> envio.getEtiquetaPagaEm() != null)   // paga basta: gerada ou nao
+                    .map(Shipment::getMeOrderId)
+                    .orElseThrow(() -> new IllegalStateException("Este pedido não tem etiqueta paga para cancelar."));
+        });
+        Cancelabilidade cancelabilidade = shippingProvider.consultarCancelamento(meOrderId);
+        if (!cancelabilidade.cancelavel()) {
+            throw new IllegalStateException("O Melhor Envio não permite mais cancelar esta etiqueta"
+                    + (cancelabilidade.motivo().isBlank() ? "." : ": " + cancelabilidade.motivo()));
+        }
+        try {
+            shippingProvider.cancelarEtiqueta(meOrderId, motivo);
+        } catch (CancelamentoRecusadoException e) {
+            throw new IllegalStateException("O Melhor Envio recusou o cancelamento da etiqueta: " + e.getMessage());
+        }
+
+        transactionTemplate.executeWithoutResult(tx ->
+                shippimentRepository.marcarCancelada(orderId, LocalDateTime.now(), motivo));
+
+    }
+
+
+
+
+
 }

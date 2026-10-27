@@ -22,6 +22,12 @@ import com.ecommercie.security.repository.RefreshTokenRepository;
 import com.ecommercie.security.repository.UserRepository;
 import com.jayway.jsonpath.JsonPath;
 import com.mercadopago.client.payment.PaymentRefundClient;
+import com.mercadopago.core.MPRequestOptions;
+import com.mercadopago.exceptions.MPException;
+import org.mockito.ArgumentCaptor;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
+import java.util.ArrayList;
+import java.util.List;
 import jakarta.servlet.http.Cookie;
 import com.ecommercie.support.DatabaseCleaner;
 import org.junit.jupiter.api.BeforeEach;
@@ -39,7 +45,13 @@ import org.springframework.test.web.servlet.MockMvc;
 import java.math.BigDecimal;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -268,5 +280,76 @@ class ReturnFlowTest {
         mockMvc.perform(patch("/api/v1/admin/orders/" + orderId + "/return/confirm")
                         .cookie(cli))
                 .andExpect(status().isForbidden());
+    }
+    @Test
+    void confirmarDevolucao_pedidoSemDevolucaoSolicitada_naoEstornaNoMercadoPago() throws Exception {
+        Cookie admin = adminCookie("admin@test.com");
+        Cookie cli = clienteCookie("cli@test.com");
+        Product p = produtoComEstoque("Camiseta", 10);
+        addAoCarrinho(cli, p.getId(), 1);
+        String orderId = checkout(cli);
+        simularPagamento(orderId); // PAGO: o cliente nao pediu devolucao
+
+        mockMvc.perform(patch("/api/v1/admin/orders/" + orderId + "/return/confirm").cookie(admin))
+                .andExpect(status().isBadRequest());
+
+        // antes o estorno saia ANTES da checagem de status: dinheiro devolvido de um pedido valido
+        verify(paymentRefundClient, never()).refund(anyLong(), any(MPRequestOptions.class));
+        verify(paymentRefundClient, never()).refund(anyLong());
+    }
+
+    @Test
+    void confirmarDevolucao_estornaForaDeTransacao_comChaveDeIdempotenciaDoPedido() throws Exception {
+        Cookie admin = adminCookie("admin@test.com");
+        Cookie cli = clienteCookie("cli@test.com");
+        Product p = produtoComEstoque("Camiseta", 10);
+        addAoCarrinho(cli, p.getId(), 1);
+        String orderId = checkout(cli);
+        simularDevolucaoSolicitada(orderId);
+        List<Boolean> transacaoAtiva = new ArrayList<>();
+        doAnswer(inv -> {
+            transacaoAtiva.add(TransactionSynchronizationManager.isActualTransactionActive());
+            return null;
+        }).when(paymentRefundClient).refund(anyLong(), any(MPRequestOptions.class));
+
+        mockMvc.perform(patch("/api/v1/admin/orders/" + orderId + "/return/confirm").cookie(admin))
+                .andExpect(status().isOk());
+
+        ArgumentCaptor<MPRequestOptions> opcoes = ArgumentCaptor.forClass(MPRequestOptions.class);
+        verify(paymentRefundClient).refund(eq(999L), opcoes.capture());
+        assertThat(opcoes.getValue().getCustomHeaders()).containsEntry("X-Idempotency-Key", "estorno-" + orderId);
+        assertThat(transacaoAtiva).containsExactly(false);
+    }
+
+    @Test
+    void confirmarDevolucao_mercadoPagoFora_naoMarcaDevolvido_eORetryUsaAMesmaChave() throws Exception {
+        Cookie admin = adminCookie("admin@test.com");
+        Cookie cli = clienteCookie("cli@test.com");
+        Product p = produtoComEstoque("Camiseta", 10);
+        addAoCarrinho(cli, p.getId(), 2);
+        String orderId = checkout(cli);
+        simularDevolucaoSolicitada(orderId);
+        int disponivelAntes = inventoryItemRepository.findByProductId(p.getId()).orElseThrow().getDisponivel();
+        when(paymentRefundClient.refund(anyLong(), any(MPRequestOptions.class)))
+                .thenThrow(new MPException("timeout"))
+                .thenReturn(null);
+
+        mockMvc.perform(patch("/api/v1/admin/orders/" + orderId + "/return/confirm").cookie(admin))
+                .andExpect(status().isServiceUnavailable());
+
+        Order depoisDaFalha = orderRepository.findById(orderId).orElseThrow();
+        assertThat(depoisDaFalha.getStatus()).isEqualTo(StatusOrder.DEVOLUCAO_SOLICITADA);
+        assertThat(depoisDaFalha.getRefundedAt()).isNull();
+        assertThat(inventoryItemRepository.findByProductId(p.getId()).orElseThrow().getDisponivel()).isEqualTo(disponivelAntes);
+
+        mockMvc.perform(patch("/api/v1/admin/orders/" + orderId + "/return/confirm").cookie(admin))
+                .andExpect(status().isOk());
+
+        ArgumentCaptor<MPRequestOptions> opcoes = ArgumentCaptor.forClass(MPRequestOptions.class);
+        verify(paymentRefundClient, org.mockito.Mockito.times(2)).refund(eq(999L), opcoes.capture());
+        assertThat(opcoes.getAllValues()).extracting(o -> o.getCustomHeaders().get("X-Idempotency-Key"))
+                .containsExactly("estorno-" + orderId, "estorno-" + orderId);
+        assertThat(orderRepository.findById(orderId).orElseThrow().getStatus()).isEqualTo(StatusOrder.DEVOLVIDO);
+        assertThat(inventoryItemRepository.findByProductId(p.getId()).orElseThrow().getDisponivel()).isEqualTo(disponivelAntes + 2);
     }
 }

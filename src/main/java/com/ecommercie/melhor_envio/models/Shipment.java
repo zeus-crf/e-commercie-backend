@@ -17,7 +17,7 @@ import java.time.LocalDateTime;
 @Builder
 public class Shipment extends BaseEntity {
 
-    @OneToOne
+    @ManyToOne
     @JoinColumn(name = "pedido_id", nullable = false)
     private Order order;
 
@@ -56,4 +56,10 @@ public class Shipment extends BaseEntity {
     // quando o ME gerou a etiqueta (transportadora avisada, pronta para imprimir)
     @Column(name = "etiqueta_gerada_em")
     private LocalDateTime etiquetaGeradaEm;
+
+    @Column(name = "etiqueta_cancelada_em")
+    private LocalDateTime etiquetaCanceladaEm;
+
+    @Column(name = "cancelamento_motivo")
+    private String cancelamentoMotivo;
 }

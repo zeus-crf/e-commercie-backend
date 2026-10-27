@@ -42,7 +42,7 @@ import com.ecommercie.fiscal.model.Invoice;
 import com.ecommercie.fiscal.repository.InvoiceRepository;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
-import static org.assertj.core.api.Assertions.as;
+import static org.mockito.ArgumentMatchers.isNotNull;
 import static org.mockito.Mockito.when;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -475,7 +475,7 @@ class ShippingFlowTest {
         mockMvc.perform(post("/api/v1/admin/orders/{id}/label", orderId).cookie(admin))
                 .andExpect(status().isConflict());
 
-        assertThat(shippimentRepository.findByOrderId(orderId).orElseThrow()).satisfies(envio -> {
+        assertThat(shippimentRepository.findAtivoByOrderId(orderId).orElseThrow()).satisfies(envio -> {
             assertThat(envio.getEtiquetaGeradaEm()).isNull();
             assertThat(envio.getEtiquetaPagaEm()).isNotNull();
         });
@@ -504,7 +504,7 @@ class ShippingFlowTest {
                 .andExpect(status().isUnprocessableEntity())
                 .andExpect(jsonPath("$.message").value(containsString("CPF do destinatario invalido")));
 
-        assertThat(shippimentRepository.findByOrderId(orderId).orElseThrow().getEtiquetaGeradaEm()).isNull();
+        assertThat(shippimentRepository.findAtivoByOrderId(orderId).orElseThrow().getEtiquetaGeradaEm()).isNull();
 
         shippingStub.recusarGeracao(false);
         mockMvc.perform(post("/api/v1/admin/orders/{id}/label", orderId).cookie(admin))
@@ -530,7 +530,7 @@ class ShippingFlowTest {
         assertThat(shippingStub.carrinhos()).isEmpty();
         assertThat(shippingStub.compras()).isEmpty();
         assertThat(shippingStub.geracoes()).isEmpty();
-        assertThat(shippimentRepository.findByOrderId(orderId).orElseThrow().getEtiquetaGeradaEm()).isNotNull();
+        assertThat(shippimentRepository.findAtivoByOrderId(orderId).orElseThrow().getEtiquetaGeradaEm()).isNotNull();
     }
 
     @Test
@@ -607,10 +607,150 @@ class ShippingFlowTest {
 
         rastreio("me-gerado", "generated");
 
-        assertThat(shippimentRepository.findByOrderId(orderId).orElseThrow().getEtiquetaGeradaEm()).isNotNull();
+        assertThat(shippimentRepository.findAtivoByOrderId(orderId).orElseThrow().getEtiquetaGeradaEm()).isNotNull();
         assertThat(orderRepository.findById(orderId).orElseThrow().getStatus()).isEqualTo(StatusOrder.EM_SEPARACAO);
         assertThat(outboxEventRepository.findAll()).extracting(ov -> ov.getType())
                 .doesNotContain(OutboxTypes.EMAIL_PEDIDO_ENVIADO);
+    }
+
+    @Test
+    void cancelarEtiqueta_pagaENaoGerada_tambemCancela() throws Exception {
+        String orderId = pedidoPago();
+        Order order = orderRepository.findById(orderId).orElseThrow();
+        order.markSeparando();
+        orderRepository.save(order);
+        envioPagoSemGerar(orderId, "me-paga-sem-gerar");
+
+        mockMvc.perform(post("/api/v1/admin/orders/{id}/label/cancel", orderId).cookie(adminCookie()))
+                .andExpect(status().isOk());
+
+        assertThat(shippingStub.cancelamentos()).containsExactly("me-paga-sem-gerar");
+        assertThat(shippimentRepository.findAll()).singleElement()
+                .satisfies(envio -> assertThat(envio.getEtiquetaCanceladaEm()).isNotNull());
+    }
+
+    @Test
+    void cancelarEtiqueta_marcaCancelada_eOPedidoPodeReceberOutra() throws Exception {
+        String orderId = pedidoPago();
+        Cookie admin = adminCookie();
+        String meOrderId = StubShippingProvider.ME_ORDER_PREFIX + orderId;
+
+        mockMvc.perform(post("/api/v1/admin/orders/{id}/label", orderId).cookie(admin))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(post("/api/v1/admin/orders/{id}/label/cancel", orderId).cookie(admin)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"motivo\":\"Endereço errado\"}"))
+                .andExpect(status().isOk());
+
+        assertThat(shippingStub.cancelamentos()).containsExactly(meOrderId);
+        assertThat(shippimentRepository.findAll()).singleElement().satisfies(envio -> {
+            assertThat(envio.getEtiquetaCanceladaEm()).isNotNull();
+            assertThat(envio.getCancelamentoMotivo()).isEqualTo("Endereço errado");
+        });
+        assertThat(orderRepository.findById(orderId).orElseThrow().getStatus()).isEqualTo(StatusOrder.EM_SEPARACAO);
+
+
+        // o pedido recebe uma etiqueta nova: o envio cancelado fica como historico
+        mockMvc.perform(post("/api/v1/admin/orders/{id}/label", orderId).cookie(admin)).andExpect(status().isOk());
+        assertThat(shippingStub.carrinhos()).hasSize(2);
+        assertThat(shippimentRepository.findAll()).hasSize(2);
+        assertThat(shippimentRepository.findAtivoByOrderId(orderId).orElseThrow().getEtiquetaGeradaEm()).isNotNull();
+    }
+
+    @Test
+    void cancelarEtiqueta_meNaoPermite_422ComOMotivo_semCancelar() throws Exception {
+        String orderId = pedidoPago();
+        Cookie admin = adminCookie();
+        mockMvc.perform(post("/api/v1/admin/orders/{id}/label", orderId).cookie(admin)).andExpect(status().isOk());
+        shippingStub.naoCancelavel(StubShippingProvider.ME_ORDER_PREFIX + orderId, "Coleta já agendada");
+
+        mockMvc.perform(post("/api/v1/admin/orders/{id}/label/cancel", orderId).cookie(admin))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.message").value(containsString("Coleta já agendada")));
+
+        assertThat(shippingStub.cancelamentos()).isEmpty();
+        assertThat(shippimentRepository.findAtivoByOrderId(orderId)).isPresent();
+    }
+
+    @Test
+    void cancelarEtiqueta_meRecusa_422_semMarcarCancelada() throws Exception {
+        String orderId = pedidoPago();
+        Cookie admin = adminCookie();
+        mockMvc.perform(post("/api/v1/admin/orders/{id}/label", orderId).cookie(admin)).andExpect(status().isOk());
+        shippingStub.recusarCancelamento(true);
+
+        mockMvc.perform(post("/api/v1/admin/orders/{id}/label/cancel", orderId).cookie(admin))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.message").value(containsString("etiqueta ja coletada")));
+
+        assertThat(shippimentRepository.findAtivoByOrderId(orderId)).isPresent();
+    }
+
+
+    @Test
+    void cancelarEtiqueta_pedidoJaEnviado_422_semChamarOMe() throws Exception {
+        String orderId = pedidoPago();
+        Cookie admin = adminCookie();
+        mockMvc.perform(post("/api/v1/admin/orders/{id}/label", orderId).cookie(admin)).andExpect(status().isOk());
+        rastreio(StubShippingProvider.ME_ORDER_PREFIX + orderId, "posted");
+
+        mockMvc.perform(post("/api/v1/admin/orders/{id}/label/cancel", orderId).cookie(admin))
+                .andExpect(status().isUnprocessableEntity());
+
+        assertThat(shippingStub.cancelamentos()).isEmpty();
+    }
+
+    @Test
+    void cancelarEtiqueta_semEtiquetaPaga_422() throws Exception {
+        String orderId = pedidoPago();
+        Order order = orderRepository.findById(orderId).orElseThrow();
+        order.markSeparando();
+        orderRepository.save(order);
+
+        mockMvc.perform(post("/api/v1/admin/orders/{id}/label/cancel", orderId).cookie(adminCookie()))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.message").value(containsString("não tem etiqueta paga")));
+    }
+
+    @Test
+    void rastreioCancelado_marcaEnvioCancelado_eOPedidoSegueEmSeparacao() throws Exception {
+        String orderId = pedidoPago();
+        Order order = orderRepository.findById(orderId).orElseThrow();
+        order.markSeparando();
+        orderRepository.save(order);
+        envioPagoSemGerar(orderId, "me-cancelada-no-painel");
+
+        rastreio("me-cancelada-no-painel", "cancelled");
+
+        assertThat(shippimentRepository.findAll()).singleElement().satisfies(envio -> {
+            assertThat(envio.getEtiquetaCanceladaEm()).isNotNull();
+            assertThat(orderRepository.findById(orderId).orElseThrow().getStatus()).isEqualTo(StatusOrder.EM_SEPARACAO);
+        });
+    }
+
+    @Test
+    void retomadaEncontraCanceladaNoMe_registraCancelamento_eOProximoCliqueGeraOutra() throws Exception {
+        String orderId = pedidoPago();
+        Order order = orderRepository.findById(orderId).orElseThrow();
+        order.markSeparando();
+        orderRepository.save(order);
+        envioPagoSemGerar(orderId, "me-cancelada");
+        shippingStub.situacao("me-cancelada", SituacaoEtiqueta.CANCELADA);
+        Cookie admin = adminCookie();
+
+        mockMvc.perform(post("/api/v1/admin/orders/{id}/label", orderId).cookie(admin))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.message").value(containsString("Clique de novo")));
+
+        assertThat(shippimentRepository.findAtivoByOrderId(orderId)).isEmpty();
+
+        mockMvc.perform(post("/api/v1/admin/orders/{id}/label", orderId).cookie(admin))
+                .andExpect(status().isOk());
+
+        assertThat(shippingStub.carrinhos()).hasSize(1);
+        assertThat(shippimentRepository.findAll()).hasSize(2);
+
     }
 
     // ----------------- helpers -----------------
@@ -625,8 +765,8 @@ class ShippingFlowTest {
 
         assertThat(orderRepository.findById(orderId).orElseThrow().getStatus())
                 .isEqualTo(StatusOrder.EM_SEPARACAO);
-        assertThat(shippimentRepository.findByOrderId(orderId).orElseThrow().getEtiquetaPagaEm()).isNotNull();
-        assertThat(shippimentRepository.findByOrderId(orderId).orElseThrow().getEtiquetaGeradaEm()).isNotNull();
+        assertThat(shippimentRepository.findAtivoByOrderId(orderId).orElseThrow().getEtiquetaPagaEm()).isNotNull();
+        assertThat(shippimentRepository.findAtivoByOrderId(orderId).orElseThrow().getEtiquetaGeradaEm()).isNotNull();
 
         assertThat(outboxEventRepository.findAll())
                 .extracting(ev -> ev.getType())
@@ -664,7 +804,7 @@ class ShippingFlowTest {
 
     /** Simula que a janela de reserva do checkout (5 min) ja passou. */
     private void expirarReserva(String orderId) {
-        Shipment envio = shippimentRepository.findByOrderId(orderId).orElseThrow();
+        Shipment envio = shippimentRepository.findAtivoByOrderId(orderId).orElseThrow();
         envio.setCheckoutIniciadoEm(LocalDateTime.now().minusMinutes(10));
         shippimentRepository.save(envio);
     }

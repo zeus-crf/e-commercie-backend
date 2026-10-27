@@ -1,5 +1,6 @@
 package com.ecommercie.melhor_envio.client;
 
+import com.ecommercie.melhor_envio.CancelamentoRecusadoException;
 import com.ecommercie.melhor_envio.GeracaoRecusadaException;
 import com.ecommercie.melhor_envio.ShippingProvider;
 import com.ecommercie.melhor_envio.dto.*;
@@ -205,8 +206,38 @@ public class MelhorEnvioClient implements ShippingProvider {
     }
 
     @Override
-    public void cancelLabel(Shipment shipment) {
+    public Cancelabilidade consultarCancelamento(String meOrderId) {
+        Map<String, Object> resposta = restClient.post()
+                .uri("/api/v2/me/shipment/cancellable")
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(new MeCheckoutRequest(List.of(meOrderId)))   // corpo {"orders": [...]}
+                .retrieve()
+                .body(new ParameterizedTypeReference<Map<String, Object>>() {});
+        if (resposta == null || !(resposta.get(meOrderId) instanceof Map<?, ?> item)) {
+            return new Cancelabilidade(false, "o Melhor Envio não devolveu a situação da etiqueta");
+        }
+        Object motivo = item.get("uncancellable_reason");
+        return new Cancelabilidade(Boolean.TRUE.equals(item.get("cancellable")), motivo == null ? "" : motivo.toString());
+    }
 
+    @Override
+    public void cancelarEtiqueta(String meOrderId, String motivo) {
+        Map<String, Object> resposta;
+        try {
+            resposta = restClient.post()
+                    .uri("/api/v2/me/shipment/cancel")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    // reason_id e sempre "2" para integracoes (doc do ME)
+                    .body(Map.of("order", Map.of("id", meOrderId, "reason_id", "2", "description", motivo)))
+                    .retrieve()
+                    .body(new ParameterizedTypeReference<Map<String, Object>>() {});
+        } catch (HttpClientErrorException e) {
+            throw new CancelamentoRecusadoException(e.getResponseBodyAsString());
+        }
+        if (resposta == null || !(resposta.get(meOrderId) instanceof Map<?, ?> item)
+                || !Boolean.TRUE.equals(item.get("canceled"))) {
+            throw new CancelamentoRecusadoException("o Melhor Envio não confirmou o cancelamento da etiqueta " + meOrderId);
+        }
     }
 
     @Override

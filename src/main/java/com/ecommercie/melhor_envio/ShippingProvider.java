@@ -1,5 +1,6 @@
 package com.ecommercie.melhor_envio;
 
+import com.ecommercie.melhor_envio.dto.Cancelabilidade;
 import com.ecommercie.melhor_envio.dto.EtiquetaRequest;
 import com.ecommercie.melhor_envio.dto.ShippingQuote;
 import com.ecommercie.melhor_envio.dto.ShippingQuoteRequest;
@@ -26,7 +27,12 @@ public interface ShippingProvider {
     /** Link privado de impressao da etiqueta ja gerada. Nao cobra nem muda nada no ME. */
     String linkImpressao(String meOrderId);
 
-    void cancelLabel(Shipment shipment);
+
 
     SituacaoEtiqueta consultarSituacao(String meOrderId);
+
+    Cancelabilidade consultarCancelamento(String meOrderId);
+
+    /** Cancela a etiqueta. Lanca CancelamentoRecusadoException se o ME recusar. */
+    void cancelarEtiqueta(String meOrderId, String motivo);
 }
