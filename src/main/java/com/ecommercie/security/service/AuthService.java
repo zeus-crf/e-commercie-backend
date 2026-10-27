@@ -1,5 +1,6 @@
 package com.ecommercie.security.service;
 
+import com.ecommercie.shared.documento.CpfCnpj;
 import com.ecommercie.security.dto.AuthRequest;
 import com.ecommercie.security.dto.RegisterRequestUser;
 import com.ecommercie.security.dto.UsuarioResponse;
@@ -72,7 +73,7 @@ public class AuthService {
                 .senha(senhaCriptografada)
                 .ativo(true)
                 .nome(request.nome())
-                .cpfCnpj(request.cpf_cnpj())
+                .cpfCnpj(CpfCnpj.somenteDigitos(request.cpf_cnpj()))
                 .papel(Papel.CLIENTE)
                 .build();
 
@@ -99,7 +100,7 @@ public class AuthService {
                 .senha(senhaCriptografada)
                 .ativo(true)
                 .nome(request.nome())
-                .cpfCnpj(request.cpf_cnpj())
+                .cpfCnpj(CpfCnpj.somenteDigitos(request.cpf_cnpj()))
                 .papel(Papel.ADMIN)
                 .build();
 

@@ -63,7 +63,7 @@ class AuthFlowTest {
 
     private String registerBody(String email, String senha) {
         return """
-                { "nome": "Fulano", "email": "%s", "senha": "%s", "cpf_cnpj": "12345678900" }
+                { "nome": "Fulano", "email": "%s", "senha": "%s", "cpf_cnpj": "12345678909" }
                 """.formatted(email, senha);
     }
 
@@ -215,5 +215,29 @@ class AuthFlowTest {
         // o que importa é que NÃO deu 403: a segurança deixou o ADMIN passar.
         mockMvc.perform(get("/api/v1/admin/qualquer").cookie(access))
                 .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void register_cpfInvalido_retorna400() throws Exception {
+        mockMvc.perform(post("/api/v1/auth/register")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                                { "nome": "Fulano", "email": "cpf@test.com", "senha": "senha123", "cpf_cnpj": "12345678900" }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.data.cpf_cnpj").value("CPF/CNPJ inválido"));
+        assertThat(userRepository.findByEmail("cpf@test.com")).isEmpty();
+    }
+
+    @Test
+    void register_cpfComMascara_gravaSoOsNumeros() throws Exception {
+        mockMvc.perform(post("/api/v1/auth/register")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                          { "nome": "Fulano", "email": "mascara@test.com", "senha": "senha123", "cpf_cnpj": "123.456.789-09" }
+                                """))
+                .andExpect(status().isOk());
+
+        assertThat(userRepository.findByEmail("mascara@test.com").orElseThrow().getCpfCnpj()).isEqualTo("12345678909");
     }
 }

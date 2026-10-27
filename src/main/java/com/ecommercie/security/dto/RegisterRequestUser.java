@@ -1,5 +1,6 @@
 package com.ecommercie.security.dto;
 
+import com.ecommercie.shared.documento.CpfCnpjValido;
 import jakarta.validation.constraints.NotBlank;
 
 public record RegisterRequestUser(
@@ -13,6 +14,7 @@ public record RegisterRequestUser(
         String senha,
 
         @NotBlank(message = "O CPF não pode ser nulo")
+        @CpfCnpjValido
         String cpf_cnpj
 ) {
 }
