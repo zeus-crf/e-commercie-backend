@@ -1,6 +1,7 @@
 package com.ecommercie.security.controller;
 
 import com.ecommercie.config.OpenApiConfig;
+import com.ecommercie.security.dto.AtualizarCpfRequest;
 import com.ecommercie.security.dto.AuthRequest;
 import com.ecommercie.security.dto.RegisterRequestUser;
 import com.ecommercie.security.dto.UsuarioResponse;
@@ -62,6 +63,14 @@ public class AuthController {
     @GetMapping("/me")
     public ResponseEntity<ApiResponse<UsuarioResponse>> me(@AuthenticationPrincipal UserDetails userDetails) {
         return ResponseEntity.ok(ApiResponse.ok(authService.me(userDetails)));
+    }
+
+    @Operation(summary = "Atualiza o CPF/CNPJ do usuário logado")
+    @SecurityRequirement(name = OpenApiConfig.COOKIE_AUTH)
+    @PatchMapping("/me/cpf")
+    public ResponseEntity<ApiResponse<Void>> atualizarCpf(@AuthenticationPrincipal UserDetails userDetails, @Valid @RequestBody AtualizarCpfRequest request) {
+        authService.atualizarCpf(userDetails, request);
+        return ResponseEntity.ok(ApiResponse.ok("CPF/CNPJ atualizado", null));
     }
 
 

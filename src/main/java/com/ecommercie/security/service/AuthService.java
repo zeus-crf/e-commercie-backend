@@ -1,5 +1,6 @@
 package com.ecommercie.security.service;
 
+import com.ecommercie.security.dto.AtualizarCpfRequest;
 import com.ecommercie.shared.documento.CpfCnpj;
 import com.ecommercie.security.dto.AuthRequest;
 import com.ecommercie.security.dto.RegisterRequestUser;
@@ -19,6 +20,7 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
@@ -196,6 +198,13 @@ public class AuthService {
                 .build();
 
         response.addHeader(HttpHeaders.SET_COOKIE, refresh.toString());
+    }
+
+    @Transactional
+    public void atualizarCpf(UserDetails userDetails, AtualizarCpfRequest request) {
+        var usuario = userRepository.findByEmail(userDetails.getUsername())
+                .orElseThrow(() -> new EntityNotFoundException("Usuário não encontrado"));
+        usuario.setCpfCnpj(CpfCnpj.somenteDigitos(request.cpf_cnpj()));
     }
 
 
