@@ -21,9 +21,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.options;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.cookie;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -239,5 +237,19 @@ class AuthFlowTest {
                 .andExpect(status().isOk());
 
         assertThat(userRepository.findByEmail("mascara@test.com").orElseThrow().getCpfCnpj()).isEqualTo("12345678909");
+    }
+
+    @Test
+    void atualizarCpf_cpfValido_gravaSoOsNumeros() throws Exception {
+        String email = "cliente-cpf@test.com";
+        Cookie cli = register(email, "senha123").getResponse().getCookie("access_token");
+
+        mockMvc.perform(patch("/api/v1/auth/me/cpf").cookie(cli)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"cpf_cnpj\":\"111.444.777-35\"}"))
+                .andExpect(status().isOk());
+
+        assertThat(userRepository.findByEmail(email).orElseThrow().getCpfCnpj()).isEqualTo("11144477735");
+
     }
 }
