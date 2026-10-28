@@ -40,7 +40,9 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.containsString;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
@@ -371,6 +373,24 @@ class OrderFlowTest {
                 .extracting(OutboxEvent::getType)
                 .containsExactlyInAnyOrder(OutboxTypes.EMAIL_PEDIDO_ENVIADO, OutboxTypes.EMAIL_PEDIDO_ENTREGUE);
     }
+
+    @Test
+    void checkout_cpfDoClienteInvalido_retorna422SemCriarPedido() throws Exception {
+        Cookie cli = clienteCookie("a@test.com");
+        User user = userRepository.findByEmail("a@test.com").orElseThrow();
+        user.setCpfCnpj("12345678900");   // cliente antigo, cadastrado antes da validacao
+        userRepository.save(user);
+        Product p = produtoComEstoque("Camiseta", "100.00", 10);
+        addAoCarrinho(cli, p.getId(), 1);
+
+        mockMvc.perform(post("/api/v1/orders").cookie(cli)
+                        .contentType(MediaType.APPLICATION_JSON).content(ENDERECO))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("PATCH /api/v1/auth/me/cpf")));
+
+        assertThat(orderRepository.findAll()).isEmpty();
+    }
+
 
     // ----------------- busca de clientes (admin) -----------------
 

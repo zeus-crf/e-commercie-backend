@@ -18,6 +18,7 @@ import com.ecommercie.pedido.models.StatusOrder;
 import com.ecommercie.pedido.repository.OrderRepository;
 import com.ecommercie.pedido.service.OrderService;
 import com.ecommercie.shared.ConflitoException;
+import com.ecommercie.shared.documento.CpfCnpj;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -60,6 +61,11 @@ public class ShippingService {
         // valida ANTES de chamar o ME: nada de comprar etiqueta para pedido que nao pode ser enviado
         if (order.getStatus() != StatusOrder.PAGO && order.getStatus() != StatusOrder.EM_SEPARACAO) {
             throw new IllegalStateException("Só é possível gerar etiqueta para pedido pago ou em separação (status atual: " + order.getStatus() + ")");
+        }
+
+        if (!CpfCnpj.valido(order.getUser().getCpfCnpj())) {
+            throw new IllegalStateException("O CPF/CNPJ do cliente deste pedido é inválido. O cliente precisa corrigir "
+                    + "o cadastro (PATCH /api/v1/auth/me/cpf) antes de gerar a etiqueta.");
         }
 
         Shipment envio = shippimentRepository.findAtivoByOrderId(orderId).orElse(null);
