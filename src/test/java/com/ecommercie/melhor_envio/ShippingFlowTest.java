@@ -753,6 +753,35 @@ class ShippingFlowTest {
 
     }
 
+    @Test
+    void gerarEtiqueta_cpfDoClienteInvalido_recusaSemChamarOMe() throws Exception {
+        String orderId = pedidoPago();
+        User cliente = userRepository.findByEmail("cli@test.com").orElseThrow();
+        cliente.setCpfCnpj("12345678900");
+        userRepository.save(cliente);
+
+        mockMvc.perform(post("/api/v1/admin/orders/{id}/label", orderId).cookie(adminCookie()))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.message").value(containsString("CPF/CNPJ do cliente")));
+
+        assertThat(shippingStub.carrinhos()).isEmpty();
+        assertThat(orderRepository.findById(orderId).orElseThrow().getStatus()).isEqualTo(StatusOrder.PAGO);
+    }
+
+    @Test
+    void gerarEtiqueta_mandaOCpfSoComNumerosParaOMe() throws Exception {
+        String orderId = pedidoPago();
+        User cliente = userRepository.findByEmail("cli@test.com").orElseThrow();
+        cliente.setCpfCnpj("123.456.789-09");
+        userRepository.save(cliente);
+
+        mockMvc.perform(post("/api/v1/admin/orders/{id}/label", orderId).cookie(adminCookie()))
+                .andExpect(status().isOk());
+
+        assertThat(shippingStub.carrinhos()).singleElement()
+                .satisfies(req -> assertThat(req.destinatario().documento()).isEqualTo("12345678909"));
+    }
+
     // ----------------- helpers -----------------
 
     private void rastreio(String meOrderId, String statusMe) throws Exception {
@@ -846,7 +875,7 @@ class ShippingFlowTest {
 
     private Cookie clienteCookie(String email) throws Exception {
         String body = """
-                { "nome": "Cliente", "email": "%s", "senha": "senha123", "cpf_cnpj": "12345678900" }
+                { "nome": "Cliente", "email": "%s", "senha": "senha123", "cpf_cnpj": "12345678909" }
                 """.formatted(email);
         return mockMvc.perform(post("/api/v1/auth/register")
                         .contentType(MediaType.APPLICATION_JSON).content(body))

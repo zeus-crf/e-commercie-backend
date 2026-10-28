@@ -170,7 +170,7 @@ public class GlobalExceptionHandlerTest {
     }
     private Cookie clienteCookie(String email) throws Exception {
         String body = """
-                { "nome": "Cliente", "email": "%s", "senha": "senha123", "cpf_cnpj": "12345678900" }
+                { "nome": "Cliente", "email": "%s", "senha": "senha123", "cpf_cnpj": "12345678909" }
                 """.formatted(email);
         return mockMvc.perform(post("/api/v1/auth/register")
                         .contentType(MediaType.APPLICATION_JSON).content(body))

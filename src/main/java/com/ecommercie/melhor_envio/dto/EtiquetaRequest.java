@@ -3,6 +3,7 @@ package com.ecommercie.melhor_envio.dto;
 import com.ecommercie.fiscal.enums.FiscalDocumentType;
 import com.ecommercie.fiscal.model.Invoice;
 import com.ecommercie.pedido.models.Order;
+import com.ecommercie.shared.documento.CpfCnpj;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -31,7 +32,7 @@ public record EtiquetaRequest(
     public static EtiquetaRequest from(Order order, int serviceId, Optional<Invoice> invoice) {
         var user = order.getUser();
         var end = order.getAddress();
-        var destinatario = new Destinatario(user.getNome(), user.getEmail(), user.getCpfCnpj(), end.getCep(),
+        var destinatario = new Destinatario(user.getNome(), user.getEmail(), CpfCnpj.somenteDigitos(user.getCpfCnpj()), end.getCep(),
                 end.getLogradouro(), end.getNumero(), end.getBairro(), end.getCidade(), end.getUf());
 
         var itens = order.getItens().stream()

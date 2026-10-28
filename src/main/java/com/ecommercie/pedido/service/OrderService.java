@@ -16,6 +16,7 @@ import com.ecommercie.pedido.repository.OrderRepository;
 import com.ecommercie.security.dto.ClienteResponse;
 import com.ecommercie.security.models.User;
 import com.ecommercie.security.repository.UserRepository;
+import com.ecommercie.shared.documento.CpfCnpj;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -41,6 +42,9 @@ public class OrderService {
     @Transactional
     public OrderResponse checkout(User user, CheckoutRequest request) {
 
+        if (!CpfCnpj.valido(user.getCpfCnpj())){
+            throw new IllegalStateException("O CPF/CNPJ é inválido, ajuste em: PATCH /api/v1/auth/me/cpf");
+        }
         Order order = new Order();
         var carrinho = cartRepository.findByUserId(user.getId())
                 .orElseThrow(() -> new IllegalArgumentException("Carrinho não encontrado"));
