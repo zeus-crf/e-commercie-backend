@@ -114,8 +114,12 @@ Não existe endpoint para criar admin (de propósito). Cadastre um usuário norm
 1. Cadastre pelo `POST /api/v1/auth/register`:
 
    ```json
-   { "nome": "Admin", "email": "admin@ecommercie.com", "senha": "troque-esta-senha", "cpf_cnpj": "00000000000" }
+   { "nome": "Admin", "email": "admin@ecommercie.com", "senha": "troque-esta-senha", "cpf_cnpj": "12345678909" }
    ```
+
+   O `cpf_cnpj` precisa ser um CPF ou CNPJ **válido** (dígitos verificadores conferem). Sequências
+   como `00000000000` são recusadas com 400. Pode vir com máscara (`123.456.789-09`): o banco guarda
+   só os números.
 
 2. Promova para `ADMIN`:
 
@@ -149,6 +153,18 @@ Fluxo de compra, em ordem:
 4. Cliente cria a preferência de pagamento (`POST /api/v1/payments/{orderId}/preference`) e paga
    no Mercado Pago. O webhook marca o pedido como `PAGO`.
 5. Admin gera a etiqueta (`POST /api/v1/admin/orders/{id}/label`) e avança o pedido.
+
+### CPF/CNPJ do cliente
+
+O documento é validado (dígitos verificadores) no cadastro e guardado só com números. Para
+corrigir o documento de uma conta já existente, o cliente logado usa:
+
+```http
+PATCH /api/v1/auth/me/cpf
+{ "cpf_cnpj": "123.456.789-09" }
+```
+
+Documento inválido retorna 400 e não altera nada.
 
 ---
 
