@@ -11,6 +11,7 @@ import com.ecommercie.security.repository.RefreshTokenRepository;
 import com.ecommercie.security.repository.UserRepository;
 import com.jayway.jsonpath.JsonPath;
 import jakarta.servlet.http.Cookie;
+import com.ecommercie.support.CatalogoDeTeste;
 import com.ecommercie.support.DatabaseCleaner;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -58,6 +59,7 @@ class CartFlowTest {
     @Autowired UserRepository userRepository;
     @Autowired RefreshTokenRepository refreshTokenRepository;
     @Autowired DatabaseCleaner databaseCleaner;
+    @Autowired CatalogoDeTeste catalogo;
 
     // limpa na ordem das FKs: carrinho (cascade nos itens) -> estoque -> produtos -> categorias -> usuarios
     @BeforeEach
@@ -77,25 +79,7 @@ class CartFlowTest {
     }
 
     private Product saveProduct(String nome, String preco) {
-        Category cat = categoryRepository.save(
-                Category.builder().nome("Cat " + nome).slug("cat-" + nome.toLowerCase()).build());
-        Product product = productRepository.save(Product.builder()
-                .category(cat)
-                .nome(nome)
-                .preco(new BigDecimal(preco))
-                .ativo(true)
-                .pesoKg(new BigDecimal("0.3"))
-                .alturaCm(new BigDecimal("2"))
-                .larguraCm(new BigDecimal("20"))
-                .comprimentoCm(new BigDecimal("30"))
-                .build());
-        inventoryItemRepository.save(
-                com.ecommercie.estoque.model.InventoryItem.builder()
-                        .product(product)
-                        .disponivel(10)
-                        .reservada(0)
-                        .build());
-        return product;
+        return catalogo.produto(nome, preco, 10).product();
     }
 
     private String itemBody(String productId, int qtd) {

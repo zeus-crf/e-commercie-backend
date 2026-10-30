@@ -52,6 +52,11 @@ public class Product extends BaseEntity {
     @Builder.Default
     private List<ProductImage> imagens =new ArrayList<>();
 
+    @OneToMany(mappedBy = "product", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OrderBy("createdAt ASC")
+    @Builder.Default
+    private List<ProductVariant> variacoes = new ArrayList<>();
+
     // fiscais (NF-e, Fase 10) - preenchidos por padrao, mas nullable por ora
     private String ncm;
 

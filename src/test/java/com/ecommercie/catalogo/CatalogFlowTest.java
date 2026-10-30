@@ -27,6 +27,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import java.math.BigDecimal;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.nullValue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -186,6 +187,21 @@ class CatalogFlowTest {
                 .andExpect(jsonPath("$.data.category_id").value(cat.getId()));
 
         assertThat(productRepository.existsByNomeIgnoreCase("Camiseta Nova")).isTrue();
+    }
+
+    @Test
+    void criarProduto_semVariacoes_nasceComAVariacaoUnica() throws Exception {
+        Category cat = saveCategory("Cat", "cat");
+        Cookie admin = adminCookie("admin@test.com");
+
+        mockMvc.perform(post("/api/v1/admin/catalog/products").cookie(admin)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(productBody(cat.getId(), "Camiseta Basica")))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.variacoes.length()").value(1))
+                .andExpect(jsonPath("$.data.variacoes[0].tamanho").value(nullValue()))
+                .andExpect(jsonPath("$.data.variacoes[0].cor").value(nullValue()))
+                .andExpect(jsonPath("$.data.variacoes[0].preco").value(99.90));
     }
 
     @Test

@@ -29,6 +29,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 import java.util.ArrayList;
 import java.util.List;
 import jakarta.servlet.http.Cookie;
+import com.ecommercie.support.CatalogoDeTeste;
 import com.ecommercie.support.DatabaseCleaner;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -75,6 +76,7 @@ class ReturnFlowTest {
     @Autowired OutboxEventRepository outboxEventRepository;
     @Autowired PasswordEncoder passwordEncoder;
     @Autowired DatabaseCleaner databaseCleaner;
+    @Autowired CatalogoDeTeste catalogo;
 
     @MockitoBean EmailService emailService;
     @MockitoBean PaymentRefundClient paymentRefundClient;
@@ -116,16 +118,7 @@ class ReturnFlowTest {
     }
 
     private Product produtoComEstoque(String nome, int estoque) {
-        Category cat = categoryRepository.save(
-                Category.builder().nome("Cat").slug("cat-" + nome.toLowerCase()).build());
-        Product p = productRepository.save(Product.builder()
-                .category(cat).nome(nome).preco(new BigDecimal("100.00")).ativo(true)
-                .pesoKg(new BigDecimal("0.3")).alturaCm(new BigDecimal("2"))
-                .larguraCm(new BigDecimal("20")).comprimentoCm(new BigDecimal("30"))
-                .build());
-        inventoryItemRepository.save(InventoryItem.builder()
-                .product(p).disponivel(estoque).reservada(0).build());
-        return p;
+        return catalogo.produto(nome, "100.00", estoque).product();
     }
 
     private void addAoCarrinho(Cookie cookie, String productId, int qtd) throws Exception {

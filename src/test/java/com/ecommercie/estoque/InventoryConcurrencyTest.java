@@ -11,6 +11,7 @@ import com.ecommercie.estoque.repository.InventoryItemRepository;
 import com.ecommercie.estoque.service.InventoryService;
 import com.ecommercie.fiscal.repository.InvoiceRepository;
 import com.ecommercie.pedido.repository.OrderRepository;
+import com.ecommercie.support.CatalogoDeTeste;
 import com.ecommercie.support.DatabaseCleaner;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -52,6 +53,7 @@ class InventoryConcurrencyTest {
     @Autowired OrderRepository orderRepository;
     @Autowired CartRepository cartRepository;
     @Autowired DatabaseCleaner databaseCleaner;
+    @Autowired CatalogoDeTeste catalogo;
 
     // Limpa na ordem das FKs. Precisa apagar pedidos e carrinhos ANTES dos produtos, mesmo que
     // esta classe nao crie nenhum: as classes de teste compartilham o banco, e a que rodou antes
@@ -63,27 +65,7 @@ class InventoryConcurrencyTest {
     }
 
     private String criarProdutoComEstoque(int disponivel) {
-        Category cat = categoryRepository.save(
-                Category.builder().nome("Camisetas").slug("camisetas").build());
-
-        Product product = productRepository.save(Product.builder()
-                .category(cat)
-                .nome("Camiseta Única")
-                .preco(new BigDecimal("99.90"))
-                .ativo(true)
-                .pesoKg(new BigDecimal("0.3"))
-                .alturaCm(new BigDecimal("2.0"))
-                .larguraCm(new BigDecimal("20.0"))
-                .comprimentoCm(new BigDecimal("30.0"))
-                .build());
-
-        inventoryItemRepository.save(InventoryItem.builder()
-                .product(product)
-                .disponivel(disponivel)
-                .reservada(0)
-                .build());
-
-        return product.getId();
+        return catalogo.produto("Camiseta Única", "99.90", disponivel).productId();
     }
 
     @Test

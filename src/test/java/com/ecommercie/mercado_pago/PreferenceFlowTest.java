@@ -9,6 +9,7 @@ import com.ecommercie.estoque.model.InventoryItem;
 import com.ecommercie.estoque.repository.InventoryItemRepository;
 import com.ecommercie.pedido.models.Order;
 import com.ecommercie.pedido.repository.OrderRepository;
+import com.ecommercie.support.CatalogoDeTeste;
 import com.ecommercie.support.DatabaseCleaner;
 import com.ecommercie.support.ExternalStubsConfiguration;
 import com.ecommercie.support.StubPaymentGateway;
@@ -57,6 +58,7 @@ class PreferenceFlowTest {
     @Autowired CategoryRepository categoryRepository;
     @Autowired InventoryItemRepository inventoryItemRepository;
     @Autowired DatabaseCleaner databaseCleaner;
+    @Autowired CatalogoDeTeste catalogo;
     @Autowired StubPaymentGateway paymentStub;
 
     @BeforeEach
@@ -145,14 +147,7 @@ class PreferenceFlowTest {
 
     /** Pedido AGUARDANDO_PAGAMENTO com 2 camisetas de R$ 50. */
     private String pedido(Cookie cli) throws Exception {
-        Category cat = categoryRepository.save(Category.builder()
-                .nome("Camisetas " + System.nanoTime()).slug("camisetas-" + System.nanoTime()).build());
-        Product p = productRepository.save(Product.builder()
-                .category(cat).nome("Camiseta").descricao("Camiseta de algodao").preco(new BigDecimal("50.00")).ativo(true)
-                .pesoKg(new BigDecimal("0.3")).alturaCm(new BigDecimal("2"))
-                .larguraCm(new BigDecimal("20")).comprimentoCm(new BigDecimal("30"))
-                .build());
-        inventoryItemRepository.save(InventoryItem.builder().product(p).disponivel(10).reservada(0).build());
+        Product p = catalogo.produto("Camiseta", "Camiseta de algodao", "50.00", 10, 0).product();
 
         mockMvc.perform(post("/api/v1/cart/items").cookie(cli)
                         .contentType(MediaType.APPLICATION_JSON)

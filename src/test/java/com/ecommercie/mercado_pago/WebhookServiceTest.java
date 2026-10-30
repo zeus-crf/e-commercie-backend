@@ -26,6 +26,7 @@ import com.ecommercie.security.repository.RefreshTokenRepository;
 import com.ecommercie.security.repository.UserRepository;
 import com.mercadopago.client.payment.PaymentClient;
 import com.mercadopago.resources.payment.Payment;
+import com.ecommercie.support.CatalogoDeTeste;
 import com.ecommercie.support.DatabaseCleaner;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -72,6 +73,7 @@ class WebhookServiceTest {
     @Autowired RefreshTokenRepository refreshTokenRepository;
     @Autowired UserRepository userRepository;
     @Autowired DatabaseCleaner databaseCleaner;
+    @Autowired CatalogoDeTeste catalogo;
 
     private final AtomicInteger seq = new AtomicInteger();
 
@@ -182,23 +184,8 @@ class WebhookServiceTest {
                 .ativo(true)
                 .build());
 
-        Category categoria = categoryRepository.save(Category.builder()
-                .nome("Categoria " + n).slug("categoria-" + n).build());
-
-        Product produto = productRepository.save(Product.builder()
-                .category(categoria)
-                .nome("Camiseta preta P")
-                .preco(new BigDecimal("150.00"))
-                .ativo(true)
-                .pesoKg(new BigDecimal("0.3"))
-                .alturaCm(new BigDecimal("2"))
-                .larguraCm(new BigDecimal("20"))
-                .comprimentoCm(new BigDecimal("30"))
-                .build());
-
         // estado pos-checkout: 2 unidades reservadas
-        inventoryItemRepository.save(InventoryItem.builder()
-                .product(produto).disponivel(10).reservada(2).build());
+        Product produto = catalogo.produto("Camiseta preta P", null, "150.00", 10, 2).product();
 
         Order pedido = Order.builder()
                 .user(user)

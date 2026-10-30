@@ -25,6 +25,7 @@ import com.ecommercie.security.models.User;
 import com.ecommercie.security.repository.RefreshTokenRepository;
 import com.ecommercie.security.repository.UserRepository;
 import jakarta.persistence.EntityNotFoundException;
+import com.ecommercie.support.CatalogoDeTeste;
 import com.ecommercie.support.DatabaseCleaner;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -59,6 +60,7 @@ class FiscalServiceTest {
     @Autowired RefreshTokenRepository refreshTokenRepository;
     @Autowired UserRepository userRepository;
     @Autowired DatabaseCleaner databaseCleaner;
+    @Autowired CatalogoDeTeste catalogo;
     @MockitoBean
     FiscalProvider fiscalProvider;
 
@@ -83,27 +85,7 @@ class FiscalServiceTest {
                 .ativo(true)
                 .build());
 
-        Category categoria = categoryRepository.save(Category.builder()
-                .nome("Categoria " + n)
-                .slug("categoria-" + n)
-                .build());
-
-        Product produto = productRepository.save(Product.builder()
-                .category(categoria)
-                .nome("Camiseta preta P")
-                .preco(new BigDecimal("150.00"))
-                .ativo(true)
-                .pesoKg(new BigDecimal("0.3"))
-                .alturaCm(new BigDecimal("2"))
-                .larguraCm(new BigDecimal("20"))
-                .comprimentoCm(new BigDecimal("30"))
-                .build());
-
-        inventoryItemRepository.save(InventoryItem.builder()
-                .product(produto)
-                .disponivel(10)
-                .reservada(0)
-                .build());
+        Product produto = catalogo.produto("Camiseta preta P", "150.00", 10).product();
 
         Address endereco = Address.builder()
                 .logradouro("Rua das Flores")

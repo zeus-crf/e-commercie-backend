@@ -7,6 +7,7 @@ import com.ecommercie.catalogo.dtos.ProductResponse;
 import com.ecommercie.catalogo.models.Category;
 import com.ecommercie.catalogo.models.Product;
 import com.ecommercie.catalogo.models.ProductImage;
+import com.ecommercie.catalogo.models.ProductVariant;
 import com.ecommercie.catalogo.repository.CategoryRepository;
 import com.ecommercie.catalogo.repository.ProductRepository;
 import com.ecommercie.catalogo.storage.StorageService;
@@ -67,6 +68,7 @@ public class CatalogService {
                 .build();
 
 
+        product.getVariacoes().add(ProductVariant.builder().product(product).build());   // variacao "unica"
 
         productRepository.save(product);
 

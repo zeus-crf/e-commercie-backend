@@ -19,6 +19,7 @@ import com.ecommercie.pedido.repository.OrderRepository;
 import com.ecommercie.security.models.Papel;
 import com.ecommercie.security.models.User;
 import com.ecommercie.security.repository.UserRepository;
+import com.ecommercie.support.CatalogoDeTeste;
 import com.ecommercie.support.DatabaseCleaner;
 import com.ecommercie.support.ExternalStubsConfiguration;
 import com.ecommercie.support.MelhorEnvioWebhookAssinatura;
@@ -75,6 +76,7 @@ class ShippingFlowTest {
     @Autowired UserRepository userRepository;
     @Autowired PasswordEncoder passwordEncoder;
     @Autowired DatabaseCleaner databaseCleaner;
+    @Autowired CatalogoDeTeste catalogo;
     @Autowired StubShippingProvider shippingStub;
     @Autowired InvoiceRepository invoiceRepository;
     @MockitoBean PoliticaFiscal politicaFiscal;   // padrao do mock: false = fiscal desligado, como nos outros testes
@@ -897,14 +899,6 @@ class ShippingFlowTest {
     }
 
     private Product produtoComEstoque() {
-        Category cat = categoryRepository.save(Category.builder().nome("Camisetas").slug("camisetas").build());
-        Product product = productRepository.save(Product.builder()
-                .category(cat).nome("Camiseta").preco(new BigDecimal("50.00")).ativo(true)
-                .pesoKg(new BigDecimal("0.3")).alturaCm(new BigDecimal("2"))
-                .larguraCm(new BigDecimal("20")).comprimentoCm(new BigDecimal("30"))
-                .build());
-        inventoryItemRepository.save(InventoryItem.builder()
-                .product(product).disponivel(10).reservada(0).build());
-        return product;
+        return catalogo.produto("Camiseta", "50.00", 10).product();
     }
 }

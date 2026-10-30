@@ -21,6 +21,7 @@ import com.ecommercie.security.models.Papel;
 import com.ecommercie.security.models.User;
 import com.ecommercie.security.repository.RefreshTokenRepository;
 import com.ecommercie.security.repository.UserRepository;
+import com.ecommercie.support.CatalogoDeTeste;
 import com.jayway.jsonpath.JsonPath;
 import jakarta.servlet.http.Cookie;
 import com.ecommercie.support.DatabaseCleaner;
@@ -75,6 +76,7 @@ class OrderFlowTest {
     @Autowired PasswordEncoder passwordEncoder;
     @Autowired DatabaseCleaner databaseCleaner;
     @Autowired OutboxEventRepository outboxEventRepository;
+    @Autowired CatalogoDeTeste catalogo;
 
     @MockitoBean ConsultaCep consultaCep;   // nenhum teste chama o ViaCEP de verdade
 
@@ -115,16 +117,7 @@ class OrderFlowTest {
     }
 
     private Product produtoComEstoque(String nome, String preco, int estoque) {
-        Category cat = categoryRepository.save(
-                Category.builder().nome("Cat " + nome).slug("cat-" + nome.toLowerCase()).build());
-        Product product = productRepository.save(Product.builder()
-                .category(cat).nome(nome).preco(new BigDecimal(preco)).ativo(true)
-                .pesoKg(new BigDecimal("0.3")).alturaCm(new BigDecimal("2"))
-                .larguraCm(new BigDecimal("20")).comprimentoCm(new BigDecimal("30"))
-                .build());
-        inventoryItemRepository.save(InventoryItem.builder()
-                .product(product).disponivel(estoque).reservada(0).build());
-        return product;
+        return catalogo.produto(nome, preco, estoque).product();
     }
 
     private void addAoCarrinho(Cookie cookie, String productId, int qtd) throws Exception {
