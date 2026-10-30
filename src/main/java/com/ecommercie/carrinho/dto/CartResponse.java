@@ -8,29 +8,27 @@ import java.util.ArrayList;
 import java.util.List;
 
 public record CartResponse(
-        String cart_id,
-        String user_id,
-        List<CartItemResponse> itens,
-        BigDecimal subtotal
-) {
-    public static CartResponse from (Cart cart) {
+                String cart_id,
+                String user_id,
+                List<CartItemResponse> itens,
+                BigDecimal subtotal) {
+        public static CartResponse from(Cart cart) {
 
-        BigDecimal subtotal = cart.getItens().stream()
-                .map(cartItem -> cartItem.getProduct().getPreco()
-                        .multiply(BigDecimal.valueOf(cartItem.getQuantidade())))
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
+                BigDecimal subtotal = cart.getItens().stream()
+                                .map(cartItem -> cartItem.getVariant().precoEfetivo()
+                                                .multiply(BigDecimal.valueOf(cartItem.getQuantidade())))
+                                .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        List<CartItemResponse> itensResponse = new ArrayList<>();
+                List<CartItemResponse> itensResponse = new ArrayList<>();
 
-        for (CartItem item : cart.getItens()) {
-            itensResponse.add(CartItemResponse.from(item));
+                for (CartItem item : cart.getItens()) {
+                        itensResponse.add(CartItemResponse.from(item));
+                }
+
+                return new CartResponse(
+                                cart.getId(),
+                                cart.getUser().getId(),
+                                itensResponse,
+                                subtotal);
         }
-
-        return new CartResponse(
-                cart.getId(),
-                cart.getUser().getId(),
-                itensResponse,
-                subtotal
-        );
-    }
 }

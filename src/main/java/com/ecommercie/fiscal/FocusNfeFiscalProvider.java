@@ -210,8 +210,8 @@ public class FocusNfeFiscalProvider implements FiscalProvider {
 
             Map<String, Object> linha = new LinkedHashMap<>();
             linha.put("numero_item", numero);
-            linha.put("codigo_produto", item.getProduct() != null ? item.getProduct().getId() : "SKU-" + numero);
-            linha.put("descricao", item.getNomeProduto());
+            linha.put("codigo_produto", codigoProduto(item, numero));
+            linha.put("descricao", item.nomeCompleto());
             linha.put("codigo_ncm", item.getNcm());
             linha.put("cfop", item.getCfop());
             linha.put("unidade_comercial", UNIDADE_PADRAO);
@@ -364,5 +364,12 @@ public class FocusNfeFiscalProvider implements FiscalProvider {
             log.debug("Consulta previa da DC-e (ref={}) nao retornou documento: {}", ref, ex.getMessage());
             return null;
         }
+    }
+
+    // SKU quando o admin cadastrou; senao o id da variacao; pedidos antigos sem variacao usam o produto
+    private static String codigoProduto(OrderItem item, int numero) {
+        if (item.getSku() != null && !item.getSku().isBlank()) return item.getSku();
+        if (item.getVariant() != null) return item.getVariant().getId();
+        return item.getProduct() != null ? item.getProduct().getId() : "SKU-" + numero;
     }
 }

@@ -1,6 +1,7 @@
 package com.ecommercie.carrinho.model;
 
 import com.ecommercie.catalogo.models.Product;
+import com.ecommercie.catalogo.models.ProductVariant;
 import com.ecommercie.shared.BaseEntity;
 import jakarta.persistence.*;
 import lombok.*;
@@ -19,8 +20,8 @@ public class CartItem extends BaseEntity {
     private Cart cart;
 
     @ManyToOne
-    @JoinColumn(name = "product_id", nullable = false)
-    private Product product;
+    @JoinColumn(name = "variant_id", nullable = false)
+    private ProductVariant variant;
 
     private int quantidade;
 }

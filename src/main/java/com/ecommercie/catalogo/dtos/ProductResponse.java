@@ -1,6 +1,7 @@
 package com.ecommercie.catalogo.dtos;
 
 import com.ecommercie.catalogo.models.Product;
+import com.ecommercie.catalogo.models.ProductVariant;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -15,6 +16,7 @@ public record ProductResponse(
         BigDecimal largura_cm,
         BigDecimal comprimento_cm,
         List<ImagensResponse> imagens,
+        List<VariantResponse> variacoes,
         String ncm,
         String cfop,
         String origem
@@ -33,6 +35,7 @@ public record ProductResponse(
                 product.getLarguraCm(),
                 product.getComprimentoCm(),
                 product.getImagens().stream().map(ImagensResponse::from).toList(),
+                product.getVariacoes().stream().filter(ProductVariant::isAtivo).map(VariantResponse::from).toList(),
                 product.getNcm(),
                 product.getCfop(),
                 product.getOrigem()

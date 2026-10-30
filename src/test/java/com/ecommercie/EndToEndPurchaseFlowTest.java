@@ -75,7 +75,7 @@ public class EndToEndPurchaseFlowTest {
                 .andReturn().getResponse().getContentAsString(),  "$.data.id");
 
 
-        String productId = JsonPath.read(mockMvc.perform(post("/api/v1/admin/catalog/products")
+        String produtoJson = mockMvc.perform(post("/api/v1/admin/catalog/products")
                 .cookie(admin).contentType(MediaType.APPLICATION_JSON)
                 .content("""
                                 {"category_id":"%s","nome":"Camiseta preta P","preco":150.00,
@@ -83,10 +83,12 @@ public class EndToEndPurchaseFlowTest {
                                  "ncm":"61091000","cfop":"6108","origem":"0"}
                                 """.formatted(categoryId))
         ).andExpect(status().is2xxSuccessful())
-                .andReturn().getResponse().getContentAsString(), "$.data.id");
+                .andReturn().getResponse().getContentAsString();
+        String productId = JsonPath.read(produtoJson, "$.data.id");
+        String variantId = JsonPath.read(produtoJson, "$.data.variacoes[0].id");
 
         // produto nasce com estoque 0, admin tem que colocar itens
-        mockMvc.perform(patch("/api/v1/admin/inventory/" + productId)
+        mockMvc.perform(patch("/api/v1/admin/inventory/variants/" + variantId)
                 .cookie(admin).contentType(MediaType.APPLICATION_JSON)
                 .content("""
                             {"disponivel": 10}
@@ -109,8 +111,8 @@ public class EndToEndPurchaseFlowTest {
         mockMvc.perform(post("/api/v1/cart/items")
                 .cookie(cliente).contentType(MediaType.APPLICATION_JSON)
                 .content("""
-                                {"product_id":"%s","quantidade":2}
-                                """.formatted(productId)))
+                                {"variant_id":"%s","quantidade":2}
+                                """.formatted(variantId)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.subtotal").value(300.00));
 

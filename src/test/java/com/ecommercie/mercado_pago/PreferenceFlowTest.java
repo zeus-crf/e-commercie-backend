@@ -2,13 +2,13 @@ package com.ecommercie.mercado_pago;
 
 import com.ecommercie.TestcontainersConfiguration;
 import com.ecommercie.catalogo.models.Category;
-import com.ecommercie.catalogo.models.Product;
 import com.ecommercie.catalogo.repository.CategoryRepository;
 import com.ecommercie.catalogo.repository.ProductRepository;
 import com.ecommercie.estoque.model.InventoryItem;
 import com.ecommercie.estoque.repository.InventoryItemRepository;
 import com.ecommercie.pedido.models.Order;
 import com.ecommercie.pedido.repository.OrderRepository;
+import com.ecommercie.support.CatalogoDeTeste;
 import com.ecommercie.support.DatabaseCleaner;
 import com.ecommercie.support.ExternalStubsConfiguration;
 import com.ecommercie.support.StubPaymentGateway;
@@ -57,6 +57,7 @@ class PreferenceFlowTest {
     @Autowired CategoryRepository categoryRepository;
     @Autowired InventoryItemRepository inventoryItemRepository;
     @Autowired DatabaseCleaner databaseCleaner;
+    @Autowired CatalogoDeTeste catalogo;
     @Autowired StubPaymentGateway paymentStub;
 
     @BeforeEach
@@ -85,6 +86,19 @@ class PreferenceFlowTest {
                 assertThat(item.precoUnitario()).isEqualByComparingTo("50.00");
             });
         });
+    }
+
+    @Test
+    void preferencia_mandaONomeComAVariacao() throws Exception {
+        Cookie cli = clienteCookie("cli@test.com");
+        var p = catalogo.produto("Camiseta", null, "M", "Azul", "50.00", 10, 0);
+        String orderId = pedidoDe(cli, p.variantId());
+
+        criarPreferencia(orderId, cli).andExpect(status().isOk());
+
+        assertThat(paymentStub.preferencias()).singleElement()
+                .satisfies(req -> assertThat(req.itens()).singleElement()
+                        .satisfies(item -> assertThat(item.nome()).isEqualTo("Camiseta - M / Azul")));
     }
 
     @Test
@@ -145,18 +159,13 @@ class PreferenceFlowTest {
 
     /** Pedido AGUARDANDO_PAGAMENTO com 2 camisetas de R$ 50. */
     private String pedido(Cookie cli) throws Exception {
-        Category cat = categoryRepository.save(Category.builder()
-                .nome("Camisetas " + System.nanoTime()).slug("camisetas-" + System.nanoTime()).build());
-        Product p = productRepository.save(Product.builder()
-                .category(cat).nome("Camiseta").descricao("Camiseta de algodao").preco(new BigDecimal("50.00")).ativo(true)
-                .pesoKg(new BigDecimal("0.3")).alturaCm(new BigDecimal("2"))
-                .larguraCm(new BigDecimal("20")).comprimentoCm(new BigDecimal("30"))
-                .build());
-        inventoryItemRepository.save(InventoryItem.builder().product(p).disponivel(10).reservada(0).build());
+        return pedidoDe(cli, catalogo.produto("Camiseta", "Camiseta de algodao", "50.00", 10, 0).variantId());
+    }
 
+    private String pedidoDe(Cookie cli, String variantId) throws Exception {
         mockMvc.perform(post("/api/v1/cart/items").cookie(cli)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"product_id\":\"%s\",\"quantidade\":2}".formatted(p.getId())))
+                        .content("{\"variant_id\":\"%s\",\"quantidade\":2}".formatted(variantId)))
                 .andExpect(status().isOk());
         String json = mockMvc.perform(post("/api/v1/orders").cookie(cli)
                         .contentType(MediaType.APPLICATION_JSON).content(ENDERECO))

@@ -2,8 +2,7 @@ package com.ecommercie.estoque;
 
 import com.ecommercie.TestcontainersConfiguration;
 import com.ecommercie.carrinho.repository.CartRepository;
-import com.ecommercie.catalogo.models.Category;
-import com.ecommercie.catalogo.models.Product;
+
 import com.ecommercie.catalogo.repository.CategoryRepository;
 import com.ecommercie.catalogo.repository.ProductRepository;
 import com.ecommercie.estoque.model.InventoryItem;
@@ -11,6 +10,7 @@ import com.ecommercie.estoque.repository.InventoryItemRepository;
 import com.ecommercie.estoque.service.InventoryService;
 import com.ecommercie.fiscal.repository.InvoiceRepository;
 import com.ecommercie.pedido.repository.OrderRepository;
+import com.ecommercie.support.CatalogoDeTeste;
 import com.ecommercie.support.DatabaseCleaner;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -19,7 +19,6 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 
-import java.math.BigDecimal;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -52,6 +51,7 @@ class InventoryConcurrencyTest {
     @Autowired OrderRepository orderRepository;
     @Autowired CartRepository cartRepository;
     @Autowired DatabaseCleaner databaseCleaner;
+    @Autowired CatalogoDeTeste catalogo;
 
     // Limpa na ordem das FKs. Precisa apagar pedidos e carrinhos ANTES dos produtos, mesmo que
     // esta classe nao crie nenhum: as classes de teste compartilham o banco, e a que rodou antes
@@ -63,32 +63,12 @@ class InventoryConcurrencyTest {
     }
 
     private String criarProdutoComEstoque(int disponivel) {
-        Category cat = categoryRepository.save(
-                Category.builder().nome("Camisetas").slug("camisetas").build());
-
-        Product product = productRepository.save(Product.builder()
-                .category(cat)
-                .nome("Camiseta Única")
-                .preco(new BigDecimal("99.90"))
-                .ativo(true)
-                .pesoKg(new BigDecimal("0.3"))
-                .alturaCm(new BigDecimal("2.0"))
-                .larguraCm(new BigDecimal("20.0"))
-                .comprimentoCm(new BigDecimal("30.0"))
-                .build());
-
-        inventoryItemRepository.save(InventoryItem.builder()
-                .product(product)
-                .disponivel(disponivel)
-                .reservada(0)
-                .build());
-
-        return product.getId();
+        return catalogo.produto("Camiseta Única", "99.90", disponivel).variantId();
     }
 
     @Test
     void reservarConcorrente_ultimaUnidade_apenasUmaReservaVence() throws Exception {
-        String productId = criarProdutoComEstoque(1);   // só 1 disponível
+        String variantId = criarProdutoComEstoque(1);   // só 1 disponível
 
         int threads = 2;
         var largada = new CountDownLatch(1);            // porteira: solta as duas juntas
@@ -101,7 +81,7 @@ class InventoryConcurrencyTest {
             pool.submit(() -> {
                 try {
                     largada.await();                     // espera o sinal
-                    inventoryService.reservarItem(productId, 1);
+                    inventoryService.reservarItem(variantId, 1);
                     sucessos.incrementAndGet();
                 } catch (Exception e) {
                     falhas.incrementAndGet();            // estoque insuficiente (o perdedor)
@@ -119,19 +99,19 @@ class InventoryConcurrencyTest {
         assertThat(sucessos.get()).isEqualTo(1);         // exatamente 1 reservou
         assertThat(falhas.get()).isEqualTo(1);           // exatamente 1 falhou
 
-        InventoryItem item = inventoryItemRepository.findByProductId(productId).orElseThrow();
+        InventoryItem item = inventoryItemRepository.findByVariantId(variantId).orElseThrow();
         assertThat(item.getReservada()).isEqualTo(1);    // reservou 1, não 2
         assertThat(item.getDisponivel()).isEqualTo(1);   // físico intacto (baixa é no pagamento)
     }
 
     @Test
     void reservar_semEstoque_falha() {
-        String productId = criarProdutoComEstoque(0);   // esgotado
+        String variantId = criarProdutoComEstoque(0);   // esgotado
 
-        assertThat(catchException(() -> inventoryService.reservarItem(productId, 1)))
+        assertThat(catchException(() -> inventoryService.reservarItem(variantId, 1)))
                 .isInstanceOf(IllegalArgumentException.class);
 
-        InventoryItem item = inventoryItemRepository.findByProductId(productId).orElseThrow();
+        InventoryItem item = inventoryItemRepository.findByVariantId(variantId).orElseThrow();
         assertThat(item.getReservada()).isEqualTo(0);    // nada foi reservado
     }
 

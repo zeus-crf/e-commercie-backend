@@ -5,22 +5,24 @@ import com.ecommercie.pedido.models.OrderItem;
 import java.math.BigDecimal;
 
 public record OrderItemResponse(
-        String product_id,     // pode ser null se o produto foi deletado
-        String nomeProduto,    // do snapshot
+        String variant_id, // pode ser null se o produto foi deletado
+        String nomeProduto, // do snapshot
         BigDecimal precoUnitario,
         int quantidade,
-        BigDecimal subtotal
-) {
+        String tamanho,
+        String cor,
+        BigDecimal subtotal) {
     public static OrderItemResponse from(OrderItem item) {
 
         var subtotal = item.getPrecoUnitario().multiply(BigDecimal.valueOf(item.getQuantidade()));
 
         return new OrderItemResponse(
-                item.getProduct() != null ? item.getProduct().getId() : null,   // produto pode ter sido deletado
+                item.getVariant() != null ? item.getVariant().getId() : null, // produto pode ter sido deletado
                 item.getNomeProduto(),
                 item.getPrecoUnitario(),
                 item.getQuantidade(),
-                subtotal
-        );
+                item.getTamanho(),
+                item.getCor(),
+                subtotal);
     }
 }

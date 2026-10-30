@@ -191,6 +191,25 @@ class FocusNfeFiscalProviderTest {
     }
 
     @Test
+    void codigoProduto_usaOSkuDaVariacao() {
+        respostaStatus = 201;
+        respostaBody = """
+                {"status":"autorizado","chave_nfe":"NFe41190612345678000123550010000000221923094166"}
+                """;
+        Order pedido = pedido();
+        OrderItem item = pedido.getItens().get(0);
+        item.setTamanho("P");
+        item.setCor("Azul");
+        item.setSku("CAM-P-AZ");
+
+        provider(FiscalDocumentType.NFE).emitir(pedido);
+
+        assertThat(corpoRecebido.get())
+                .contains("\"codigo_produto\":\"CAM-P-AZ\"")
+                .contains("\"descricao\":\"Camiseta preta P - P / Azul\"");
+    }
+
+    @Test
     void nfe_processandoAutorizacao_lanca() {
         respostaStatus = 202;
         respostaBody = "{\"status\":\"processando_autorizacao\"}";

@@ -97,7 +97,7 @@ public class WebhookService {
         orderRepository.save(order);
 
         for (OrderItem item : order.getItens()) {
-            inventoryService.confirmarBaixa(item.getProduct().getId(), item.getQuantidade());
+            inventoryService.confirmarBaixa(item.getVariant().getId(), item.getQuantidade());
         }
 
         outboxService.registrar(

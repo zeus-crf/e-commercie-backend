@@ -21,10 +21,10 @@ public class AdminInventoryController {
 
     private final InventoryService inventoryService;
 
-    @Operation(summary = "Ajusta a quantidade disponível em estoque de um produto")
-    @PatchMapping("/{productId}")
-    public ResponseEntity<ApiResponse<Void>> ajustarEstoque(@PathVariable String productId, @Valid @RequestBody InventoryItemRequest request) {
-        inventoryService.ajustarEstoque(productId, request.disponivel());
+    @Operation(summary = "Ajusta a quantidade disponível em estoque de uma variação de produto")
+    @PatchMapping("/variants/{variantId}")
+    public ResponseEntity<ApiResponse<Void>> ajustarEstoque(@PathVariable String variantId, @Valid @RequestBody InventoryItemRequest request) {
+        inventoryService.ajustarEstoque(variantId, request.disponivel());
         return ResponseEntity.ok(ApiResponse.ok("Estoque atualizado", null));
     }
 }

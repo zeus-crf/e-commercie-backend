@@ -2,7 +2,6 @@ package com.ecommercie;
 
 import com.ecommercie.carrinho.repository.CartRepository;
 import com.ecommercie.catalogo.models.Category;
-import com.ecommercie.catalogo.models.Product;
 import com.ecommercie.catalogo.repository.CategoryRepository;
 import com.ecommercie.catalogo.repository.ProductRepository;
 import com.ecommercie.estoque.model.InventoryItem;
@@ -15,6 +14,7 @@ import com.ecommercie.security.models.Papel;
 import com.ecommercie.security.models.User;
 import com.ecommercie.security.repository.RefreshTokenRepository;
 import com.ecommercie.security.repository.UserRepository;
+import com.ecommercie.support.CatalogoDeTeste;
 import com.ecommercie.support.DatabaseCleaner;
 import com.ecommercie.support.ExternalStubsConfiguration;
 import com.ecommercie.support.StubShippingProvider;
@@ -69,6 +69,7 @@ public class GlobalExceptionHandlerTest {
     @Autowired PasswordEncoder passwordEncoder;
     @Autowired
     DatabaseCleaner databaseCleaner;
+    @Autowired CatalogoDeTeste catalogo;
     @Autowired
     OutboxEventRepository outboxEventRepository;
     @Autowired
@@ -177,25 +178,16 @@ public class GlobalExceptionHandlerTest {
                 .andReturn().getResponse().getCookie("access_token");
     }
 
-    private Product produtoComEstoque(String nome, String preco, int estoque) {
-        Category cat = categoryRepository.save(
-                Category.builder().nome("Cat " + nome).slug("cat-" + nome.toLowerCase()).build());
-        Product product = productRepository.save(Product.builder()
-                .category(cat).nome(nome).preco(new BigDecimal(preco)).ativo(true)
-                .pesoKg(new BigDecimal("0.3")).alturaCm(new BigDecimal("2"))
-                .larguraCm(new BigDecimal("20")).comprimentoCm(new BigDecimal("30"))
-                .build());
-        inventoryItemRepository.save(InventoryItem.builder()
-                .product(product).disponivel(estoque).reservada(0).build());
-        return product;
+    private CatalogoDeTeste.Item produtoComEstoque(String nome, String preco, int estoque) {
+        return catalogo.produto(nome, preco, estoque);
     }
 
     private String pedidoAguardandoPagamento() throws Exception {
         Cookie cli = clienteCookie("cli@test.com");
-        Product p = produtoComEstoque("Camisa", "10", 10);
+        var p = produtoComEstoque("Camisa", "10", 10);
         mockMvc.perform(post("/api/v1/cart/items").cookie(cli)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"product_id\":\"%s\",\"quantidade\":2}".formatted(p.getId())))
+                        .content("{\"variant_id\":\"%s\",\"quantidade\":2}".formatted(p.variantId())))
                 .andExpect(status().isOk());
         String json = mockMvc.perform(post("/api/v1/orders").cookie(cli)
                         .contentType(MediaType.APPLICATION_JSON).content(ENDERECO))

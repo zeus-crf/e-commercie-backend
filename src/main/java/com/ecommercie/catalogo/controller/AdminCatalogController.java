@@ -4,6 +4,8 @@ import com.ecommercie.catalogo.dtos.CategoryRequest;
 import com.ecommercie.catalogo.dtos.CategoryResponse;
 import com.ecommercie.catalogo.dtos.ProductRequest;
 import com.ecommercie.catalogo.dtos.ProductResponse;
+import com.ecommercie.catalogo.dtos.VariantRequest;
+import com.ecommercie.catalogo.dtos.VariantResponse;
 import com.ecommercie.catalogo.service.CatalogService;
 import com.ecommercie.config.OpenApiConfig;
 import com.ecommercie.shared.ApiResponse;
@@ -106,5 +108,19 @@ public class AdminCatalogController {
     public ResponseEntity<ApiResponse<Void>> deleteCategory(@PathVariable String categoryId) {
         catalogService.deleteCategory(categoryId);
         return ResponseEntity.noContent().build();
+    }
+
+    // ---------- Variações ----------
+    @Operation(summary = "Adiciona uma variação (tamanho/cor) a um produto")
+    @PostMapping("/products/{productId}/variants")
+    public ResponseEntity<ApiResponse<VariantResponse>> criarVariacao(@PathVariable String productId, @Valid @RequestBody VariantRequest request) {
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.ok("Variação criada", catalogService.criarVariacao(productId, request)));
+    }
+
+    @Operation(summary = "Edita uma variação do produto (envie ativo=false para desativar)")
+    @PutMapping("/variants/{variantId}")
+    public ResponseEntity<ApiResponse<VariantResponse>> editarVariacao(@PathVariable String variantId, @Valid @RequestBody VariantRequest request) {
+        return ResponseEntity.ok(ApiResponse.ok("Variação atualizada", catalogService.editarVariacao(variantId, request)));
     }
 }

@@ -7,13 +7,17 @@ import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.List;
 import java.util.Optional;
 
 public interface InventoryItemRepository extends JpaRepository<InventoryItem, String> {
 
-    @Query("SELECT i FROM InventoryItem i WHERE i.product.id = :productId")
+    @Query("SELECT i FROM InventoryItem i WHERE i.variant.id = :variantId")
     @Lock(LockModeType.PESSIMISTIC_WRITE)
-    Optional<InventoryItem> lockForUpdate(@Param("productId") String productId);
+    Optional<InventoryItem> lockForUpdate(@Param("variantId") String variantId);
 
-    Optional<InventoryItem> findByProductId(String productId);
+    Optional<InventoryItem> findByVariantId(String variantId);
+
+    List<InventoryItem> findByVariantProductId(String productId);
+    
 }

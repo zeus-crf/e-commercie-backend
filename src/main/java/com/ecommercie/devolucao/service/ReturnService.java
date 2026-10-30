@@ -88,8 +88,8 @@ public class ReturnService {
                     .orElseThrow(() -> new EntityNotFoundException("Pedido não encontrado"));
             exigirDevolucaoSolicitada(order);
             for (OrderItem item : order.getItens()) {
-                if (item.getProduct() != null) {
-                    inventoryService.estornarBaixa(item.getProduct().getId(), item.getQuantidade());
+                if (item.getVariant() != null) {
+                    inventoryService.estornarBaixa(item.getVariant().getId(), item.getQuantidade());
                 }
             }
             order.markDevolucao();

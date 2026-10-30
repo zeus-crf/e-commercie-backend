@@ -13,7 +13,6 @@ public record MeCartRequest(
         MeAddress to,
         List<MeProduct> products,
         List<MeVolume> volumes,
-        @JsonProperty("insurance_value") BigDecimal insurance_value,
         MeOptions options
 ) {
 
@@ -42,10 +41,31 @@ public record MeCartRequest(
             BigDecimal width,
             BigDecimal height,
             BigDecimal length
-    ) {}
+    ) {
+        /**
+         * Junta todos os itens do pedido em UM volume (os Correios nao aceitam mais de um por envio).
+         * Peso: soma de peso x quantidade. Largura e comprimento: o maior entre os itens. Altura: soma
+         * de altura x quantidade (as pecas ficam empilhadas).
+         */
+        public static MeVolume agrupando(java.util.List<EtiquetaRequest.Item> itens) {
+            BigDecimal peso = BigDecimal.ZERO;
+            BigDecimal altura = BigDecimal.ZERO;
+            BigDecimal largura = BigDecimal.ZERO;
+            BigDecimal comprimento = BigDecimal.ZERO;
+            for (EtiquetaRequest.Item i : itens) {
+                BigDecimal qtd = BigDecimal.valueOf(i.quantidade());
+                peso = peso.add(i.pesoKg().multiply(qtd));
+                altura = altura.add(i.alturaCm().multiply(qtd));
+                largura = largura.max(i.larguraCm());
+                comprimento = comprimento.max(i.comprimentoCm());
+            }
+            return new MeVolume(peso, largura, altura, comprimento);
+        }
+    }
 
+    /** insurance_value (valor segurado) mora AQUI na API do ME; na raiz do corpo ele e ignorado. */
     @JsonInclude(JsonInclude.Include.NON_NULL)
-    public record MeOptions(MeInvoice invoice, MeDce dce) {
+    public record MeOptions(@JsonProperty("insurance_value") BigDecimal insurance_value, MeInvoice invoice, MeDce dce) {
         public record MeInvoice(String key) {}
         public record MeDce(String key) {}
     }

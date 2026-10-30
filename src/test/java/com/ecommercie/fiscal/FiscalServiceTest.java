@@ -4,6 +4,7 @@ import com.ecommercie.TestcontainersConfiguration;
 import com.ecommercie.carrinho.repository.CartRepository;
 import com.ecommercie.catalogo.models.Category;
 import com.ecommercie.catalogo.models.Product;
+import com.ecommercie.catalogo.models.ProductVariant;
 import com.ecommercie.catalogo.repository.CategoryRepository;
 import com.ecommercie.catalogo.repository.ProductRepository;
 import com.ecommercie.estoque.model.InventoryItem;
@@ -25,6 +26,7 @@ import com.ecommercie.security.models.User;
 import com.ecommercie.security.repository.RefreshTokenRepository;
 import com.ecommercie.security.repository.UserRepository;
 import jakarta.persistence.EntityNotFoundException;
+import com.ecommercie.support.CatalogoDeTeste;
 import com.ecommercie.support.DatabaseCleaner;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -59,6 +61,7 @@ class FiscalServiceTest {
     @Autowired RefreshTokenRepository refreshTokenRepository;
     @Autowired UserRepository userRepository;
     @Autowired DatabaseCleaner databaseCleaner;
+    @Autowired CatalogoDeTeste catalogo;
     @MockitoBean
     FiscalProvider fiscalProvider;
 
@@ -83,27 +86,8 @@ class FiscalServiceTest {
                 .ativo(true)
                 .build());
 
-        Category categoria = categoryRepository.save(Category.builder()
-                .nome("Categoria " + n)
-                .slug("categoria-" + n)
-                .build());
-
-        Product produto = productRepository.save(Product.builder()
-                .category(categoria)
-                .nome("Camiseta preta P")
-                .preco(new BigDecimal("150.00"))
-                .ativo(true)
-                .pesoKg(new BigDecimal("0.3"))
-                .alturaCm(new BigDecimal("2"))
-                .larguraCm(new BigDecimal("20"))
-                .comprimentoCm(new BigDecimal("30"))
-                .build());
-
-        inventoryItemRepository.save(InventoryItem.builder()
-                .product(produto)
-                .disponivel(10)
-                .reservada(0)
-                .build());
+        var item = catalogo.produto("Camiseta preta P", "150.00", 10);
+        Product produto = item.product();
 
         Address endereco = Address.builder()
                 .logradouro("Rua das Flores")
@@ -133,6 +117,7 @@ class FiscalServiceTest {
         pedido.getItens().add(OrderItem.builder()
                 .order(pedido)
                 .product(produto)
+                .variant(item.variacao())
                 .nomeProduto(produto.getNome())
                 .precoUnitario(produto.getPreco())
                 .quantidade(2)

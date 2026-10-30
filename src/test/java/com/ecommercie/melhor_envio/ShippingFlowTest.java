@@ -2,9 +2,9 @@ package com.ecommercie.melhor_envio;
 
 import com.ecommercie.TestcontainersConfiguration;
 import com.ecommercie.catalogo.models.Category;
-import com.ecommercie.catalogo.models.Product;
 import com.ecommercie.catalogo.repository.CategoryRepository;
 import com.ecommercie.catalogo.repository.ProductRepository;
+import com.ecommercie.catalogo.repository.ProductVariantRepository;
 import com.ecommercie.estoque.model.InventoryItem;
 import com.ecommercie.estoque.repository.InventoryItemRepository;
 import com.ecommercie.melhor_envio.enums.SituacaoEtiqueta;
@@ -19,6 +19,7 @@ import com.ecommercie.pedido.repository.OrderRepository;
 import com.ecommercie.security.models.Papel;
 import com.ecommercie.security.models.User;
 import com.ecommercie.security.repository.UserRepository;
+import com.ecommercie.support.CatalogoDeTeste;
 import com.ecommercie.support.DatabaseCleaner;
 import com.ecommercie.support.ExternalStubsConfiguration;
 import com.ecommercie.support.MelhorEnvioWebhookAssinatura;
@@ -70,11 +71,13 @@ class ShippingFlowTest {
     @Autowired ShipmentTrackingEventRepository shipmentTrackingEventRepository;
     @Autowired OutboxEventRepository outboxEventRepository;
     @Autowired ProductRepository productRepository;
+    @Autowired ProductVariantRepository variantRepository;
     @Autowired CategoryRepository categoryRepository;
     @Autowired InventoryItemRepository inventoryItemRepository;
     @Autowired UserRepository userRepository;
     @Autowired PasswordEncoder passwordEncoder;
     @Autowired DatabaseCleaner databaseCleaner;
+    @Autowired CatalogoDeTeste catalogo;
     @Autowired StubShippingProvider shippingStub;
     @Autowired InvoiceRepository invoiceRepository;
     @MockitoBean PoliticaFiscal politicaFiscal;   // padrao do mock: false = fiscal desligado, como nos outros testes
@@ -782,6 +785,25 @@ class ShippingFlowTest {
                 .satisfies(req -> assertThat(req.destinatario().documento()).isEqualTo("12345678909"));
     }
 
+    @Test
+    void etiqueta_usaPesoEMedidasDaVariacao() throws Exception {
+        var base = produtoComEstoque();   // 0,3 kg
+        var g = catalogo.variacao(base, "G", null, null, 10);
+        g.setPesoKg(new BigDecimal("0.8"));
+        variantRepository.save(g);
+        String orderId = pedidoPagoDe(g.getId());
+
+        mockMvc.perform(post("/api/v1/admin/orders/{id}/label", orderId).cookie(adminCookie()))
+                .andExpect(status().isOk());
+
+        assertThat(shippingStub.carrinhos()).singleElement()
+                .satisfies(req -> assertThat(req.itens()).singleElement().satisfies(item -> {
+                    assertThat(item.pesoKg()).isEqualByComparingTo("0.8");
+                    assertThat(item.alturaCm()).isEqualByComparingTo("2");   // herdada do produto
+                    assertThat(item.nome()).isEqualTo("Camiseta - G");
+                }));
+    }
+
     // ----------------- helpers -----------------
 
     private void rastreio(String meOrderId, String statusMe) throws Exception {
@@ -840,11 +862,14 @@ class ShippingFlowTest {
 
     /** Cliente compra 2 unidades e o pedido vai direto para PAGO (o webhook do MP é testado no E2E). */
     private String pedidoPago() throws Exception {
+        return pedidoPagoDe(produtoComEstoque().variantId());
+    }
+
+    private String pedidoPagoDe(String variantId) throws Exception {
         Cookie cli = clienteCookie("cli@test.com");
-        Product p = produtoComEstoque();
         mockMvc.perform(post("/api/v1/cart/items").cookie(cli)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"product_id\":\"%s\",\"quantidade\":2}".formatted(p.getId())))
+                        .content("{\"variant_id\":\"%s\",\"quantidade\":2}".formatted(variantId)))
                 .andExpect(status().isOk());
         String json = mockMvc.perform(post("/api/v1/orders").cookie(cli)
                         .contentType(MediaType.APPLICATION_JSON).content(ENDERECO))
@@ -896,15 +921,7 @@ class ShippingFlowTest {
                 .andReturn().getResponse().getCookie("access_token");
     }
 
-    private Product produtoComEstoque() {
-        Category cat = categoryRepository.save(Category.builder().nome("Camisetas").slug("camisetas").build());
-        Product product = productRepository.save(Product.builder()
-                .category(cat).nome("Camiseta").preco(new BigDecimal("50.00")).ativo(true)
-                .pesoKg(new BigDecimal("0.3")).alturaCm(new BigDecimal("2"))
-                .larguraCm(new BigDecimal("20")).comprimentoCm(new BigDecimal("30"))
-                .build());
-        inventoryItemRepository.save(InventoryItem.builder()
-                .product(product).disponivel(10).reservada(0).build());
-        return product;
+    private CatalogoDeTeste.Item produtoComEstoque() {
+        return catalogo.produto("Camiseta", "50.00", 10);
     }
 }
