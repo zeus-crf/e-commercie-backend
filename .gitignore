@@ -36,3 +36,8 @@ build/
 .env
 .env.*
 !.env.example
+
+# crash da JVM e historico local do IDE
+hs_err_pid*.log
+replay_pid*.log
+.history/
