@@ -46,7 +46,7 @@ public class CartService {
             throw new IllegalArgumentException("Esta variação do produto não está disponível");
         }
 
-        var estoque = inventoryItemRepository.findByProductId(variant.getProduct().getId())
+        var estoque = inventoryItemRepository.findByVariantId(variant.getId())
                 .orElseThrow(() -> new EntityNotFoundException("Estoque não encontrado para o produto"));
 
         Optional<CartItem> existente = carrinho.getItens().stream()
@@ -89,7 +89,7 @@ public class CartService {
             throw new IllegalArgumentException("Esta variação do produto não está disponível");
         }
 
-        var estoque = inventoryItemRepository.findByProductId(variant.getProduct().getId())
+        var estoque = inventoryItemRepository.findByVariantId(variant.getId())
                 .orElseThrow(() -> new EntityNotFoundException("Estoque não encontrado para o produto"));
 
         int disponivel = estoque.getDisponivel() - estoque.getReservada();

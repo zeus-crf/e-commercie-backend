@@ -50,7 +50,7 @@ public class CatalogoDeTeste {
         ProductVariant v = variantRepository.save(ProductVariant.builder()
                 .product(p).tamanho(tamanho).cor(cor).build());
         inventoryItemRepository.save(InventoryItem.builder()
-                .product(p).disponivel(disponivel).reservada(reservada).build());
+                .variant(v).disponivel(disponivel).reservada(reservada).build());
         return new Item(p, v);
     }
 
@@ -58,15 +58,15 @@ public class CatalogoDeTeste {
         return produto(nome, descricao, null, null, preco, disponivel, reservada);
     }
 
-    /**
-     * Variacao extra de um produto ja criado (preco null = herda). Estoque: ver
-     * Task 3.
-     */
-    public ProductVariant variacao(Item base, String tamanho, String cor, String preco) {
-        return variantRepository.save(ProductVariant.builder()
+    /** Variacao extra de um produto ja criado (preco null = herda), com o proprio estoque. */
+    public ProductVariant variacao(Item base, String tamanho, String cor, String preco, int disponivel) {
+        ProductVariant v = variantRepository.save(ProductVariant.builder()
                 .product(base.product()).tamanho(tamanho).cor(cor)
                 .preco(preco == null ? null : new BigDecimal(preco))
                 .build());
+        inventoryItemRepository.save(InventoryItem.builder()
+                .variant(v).disponivel(disponivel).reservada(0).build());
+        return v;
     }
 
     public Item produto(String nome, String preco, int disponivel) {

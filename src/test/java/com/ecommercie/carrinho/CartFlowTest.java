@@ -6,6 +6,8 @@ import com.ecommercie.catalogo.repository.CategoryRepository;
 import com.ecommercie.catalogo.repository.ProductRepository;
 import com.ecommercie.catalogo.repository.ProductVariantRepository;
 import com.ecommercie.estoque.repository.InventoryItemRepository;
+import com.ecommercie.security.models.Papel;
+import com.ecommercie.security.models.User;
 import com.ecommercie.security.repository.RefreshTokenRepository;
 import com.ecommercie.security.repository.UserRepository;
 import com.jayway.jsonpath.JsonPath;
@@ -21,10 +23,12 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
@@ -72,6 +76,7 @@ class CartFlowTest {
         DatabaseCleaner databaseCleaner;
         @Autowired
         ProductVariantRepository variantRepository;
+        @Autowired PasswordEncoder passwordEncoder;
         @Autowired
         CatalogoDeTeste catalogo;
 
@@ -83,6 +88,22 @@ class CartFlowTest {
         }
 
         // ----------------- helpers -----------------
+
+        
+    private Cookie adminCookie(String email) throws Exception {
+        userRepository.save(User.builder()
+                .nome("Admin E2E").email(email)
+                .senha(passwordEncoder.encode("senha123"))
+                .cpfCnpj("00000000000").papel(Papel.ADMIN).ativo(true)
+                .build());
+
+        return mockMvc.perform(post("/api/v1/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"email":"%s","senha":"senha123"}
+                                """.formatted(email)))
+                .andReturn().getResponse().getCookie("access_token");
+    }
 
         private Cookie clienteCookie(String email) throws Exception {
                 String body = """
@@ -210,7 +231,7 @@ class CartFlowTest {
         void duasVariacoesDoMesmoProduto_viramDuasLinhas_comOPrecoDeCada() throws Exception {
                 Cookie cli = clienteCookie("cli@test.com");
                 var base = catalogo.produto("Camiseta Basica", "50.00", 10);
-                var g = catalogo.variacao(base, "G", "Preto", "60.00");
+                var g = catalogo.variacao(base, "G", "Preto", "60.00", 10);
 
                 adicionar(cli, base.variantId(), 1).andExpect(status().isOk());
                 adicionar(cli, g.getId(), 2)
@@ -229,5 +250,36 @@ class CartFlowTest {
                 adicionar(clienteCookie("cli@test.com"), base.variantId(), 1)
                                 .andExpect(status().isBadRequest())
                                 .andExpect(jsonPath("$.message").value("Esta variação do produto não está disponível"));
+        }
+
+        @Test
+        void estoqueEPorVariacao_esgotadoNaoBloqueiaOutraVariacao() throws Exception {
+                Cookie cli = clienteCookie("cli@test.com");
+                var m = catalogo.produto("Camiseta", "50.00", 0); // variação única, sem estoque
+                var g = catalogo.variacao(m, "G", null, null, 5);
+
+                adicionar(cli, m.variantId(), 1).andExpect(status().isBadRequest());
+                adicionar(cli, g.getId(), 1).andExpect(status().isOk());
+        }
+
+        @Test
+        void admin_ajustaEstoqueDaVariacao() throws Exception {
+                var item = catalogo.produto("Camiseta", "50.00", 0);
+
+                mockMvc.perform(patch("/api/v1/admin/inventory/variants/{id}", item.variantId())
+                                .cookie(adminCookie("admin@test.com"))
+                                .contentType(MediaType.APPLICATION_JSON).content("{\"disponivel\": 7}"))
+                                .andExpect(status().isOk());
+
+                assertThat(inventoryItemRepository.findByVariantId(item.variantId()).orElseThrow().getDisponivel())
+                                .isEqualTo(7);
+        }
+
+        @Test
+        void admin_ajustaEstoqueDeVariacaoInexistente_retorna404() throws Exception {
+                mockMvc.perform(patch("/api/v1/admin/inventory/variants/{id}", "nao-existe")
+                                .cookie(adminCookie("admin@test.com"))
+                                .contentType(MediaType.APPLICATION_JSON).content("{\"disponivel\": 7}"))
+                                .andExpect(status().isNotFound());
         }
 }

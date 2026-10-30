@@ -226,7 +226,7 @@ class ReturnFlowTest {
         String orderId = checkout(cli);
 
         // simula estoque confirmado (como o webhook faria)
-        InventoryItem inv = inventoryItemRepository.findByProductId(p.productId()).orElseThrow();
+        InventoryItem inv = inventoryItemRepository.findByVariantId(p.variantId()).orElseThrow();
         inv.setReservada(0);
         inv.setDisponivel(7); // 10 - 3 baixados
         inventoryItemRepository.save(inv);
@@ -243,7 +243,7 @@ class ReturnFlowTest {
         assertThat(order.getRefundedAt()).isNotNull();
 
         // estoque foi reabastecido
-        InventoryItem invDepois = inventoryItemRepository.findByProductId(p.productId()).orElseThrow();
+        InventoryItem invDepois = inventoryItemRepository.findByVariantId(p.variantId()).orElseThrow();
         assertThat(invDepois.getDisponivel()).isEqualTo(10); // 7 + 3 devolvidos
     }
 
@@ -321,7 +321,7 @@ class ReturnFlowTest {
         addAoCarrinho(cli, p.variantId(), 2);
         String orderId = checkout(cli);
         simularDevolucaoSolicitada(orderId);
-        int disponivelAntes = inventoryItemRepository.findByProductId(p.productId()).orElseThrow().getDisponivel();
+        int disponivelAntes = inventoryItemRepository.findByVariantId(p.variantId()).orElseThrow().getDisponivel();
         when(paymentRefundClient.refund(anyLong(), any(MPRequestOptions.class)))
                 .thenThrow(new MPException("timeout"))
                 .thenReturn(null);
@@ -332,7 +332,7 @@ class ReturnFlowTest {
         Order depoisDaFalha = orderRepository.findById(orderId).orElseThrow();
         assertThat(depoisDaFalha.getStatus()).isEqualTo(StatusOrder.DEVOLUCAO_SOLICITADA);
         assertThat(depoisDaFalha.getRefundedAt()).isNull();
-        assertThat(inventoryItemRepository.findByProductId(p.productId()).orElseThrow().getDisponivel()).isEqualTo(disponivelAntes);
+        assertThat(inventoryItemRepository.findByVariantId(p.variantId()).orElseThrow().getDisponivel()).isEqualTo(disponivelAntes);
 
         mockMvc.perform(patch("/api/v1/admin/orders/" + orderId + "/return/confirm").cookie(admin))
                 .andExpect(status().isOk());
@@ -342,6 +342,6 @@ class ReturnFlowTest {
         assertThat(opcoes.getAllValues()).extracting(o -> o.getCustomHeaders().get("X-Idempotency-Key"))
                 .containsExactly("estorno-" + orderId, "estorno-" + orderId);
         assertThat(orderRepository.findById(orderId).orElseThrow().getStatus()).isEqualTo(StatusOrder.DEVOLVIDO);
-        assertThat(inventoryItemRepository.findByProductId(p.productId()).orElseThrow().getDisponivel()).isEqualTo(disponivelAntes + 2);
+        assertThat(inventoryItemRepository.findByVariantId(p.variantId()).orElseThrow().getDisponivel()).isEqualTo(disponivelAntes + 2);
     }
 }

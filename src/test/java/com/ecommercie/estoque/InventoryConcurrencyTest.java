@@ -2,8 +2,7 @@ package com.ecommercie.estoque;
 
 import com.ecommercie.TestcontainersConfiguration;
 import com.ecommercie.carrinho.repository.CartRepository;
-import com.ecommercie.catalogo.models.Category;
-import com.ecommercie.catalogo.models.Product;
+
 import com.ecommercie.catalogo.repository.CategoryRepository;
 import com.ecommercie.catalogo.repository.ProductRepository;
 import com.ecommercie.estoque.model.InventoryItem;
@@ -20,7 +19,6 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 
-import java.math.BigDecimal;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -65,12 +63,12 @@ class InventoryConcurrencyTest {
     }
 
     private String criarProdutoComEstoque(int disponivel) {
-        return catalogo.produto("Camiseta Única", "99.90", disponivel).productId();
+        return catalogo.produto("Camiseta Única", "99.90", disponivel).variantId();
     }
 
     @Test
     void reservarConcorrente_ultimaUnidade_apenasUmaReservaVence() throws Exception {
-        String productId = criarProdutoComEstoque(1);   // só 1 disponível
+        String variantId = criarProdutoComEstoque(1);   // só 1 disponível
 
         int threads = 2;
         var largada = new CountDownLatch(1);            // porteira: solta as duas juntas
@@ -83,7 +81,7 @@ class InventoryConcurrencyTest {
             pool.submit(() -> {
                 try {
                     largada.await();                     // espera o sinal
-                    inventoryService.reservarItem(productId, 1);
+                    inventoryService.reservarItem(variantId, 1);
                     sucessos.incrementAndGet();
                 } catch (Exception e) {
                     falhas.incrementAndGet();            // estoque insuficiente (o perdedor)
@@ -101,19 +99,19 @@ class InventoryConcurrencyTest {
         assertThat(sucessos.get()).isEqualTo(1);         // exatamente 1 reservou
         assertThat(falhas.get()).isEqualTo(1);           // exatamente 1 falhou
 
-        InventoryItem item = inventoryItemRepository.findByProductId(productId).orElseThrow();
+        InventoryItem item = inventoryItemRepository.findByVariantId(variantId).orElseThrow();
         assertThat(item.getReservada()).isEqualTo(1);    // reservou 1, não 2
         assertThat(item.getDisponivel()).isEqualTo(1);   // físico intacto (baixa é no pagamento)
     }
 
     @Test
     void reservar_semEstoque_falha() {
-        String productId = criarProdutoComEstoque(0);   // esgotado
+        String variantId = criarProdutoComEstoque(0);   // esgotado
 
-        assertThat(catchException(() -> inventoryService.reservarItem(productId, 1)))
+        assertThat(catchException(() -> inventoryService.reservarItem(variantId, 1)))
                 .isInstanceOf(IllegalArgumentException.class);
 
-        InventoryItem item = inventoryItemRepository.findByProductId(productId).orElseThrow();
+        InventoryItem item = inventoryItemRepository.findByVariantId(variantId).orElseThrow();
         assertThat(item.getReservada()).isEqualTo(0);    // nada foi reservado
     }
 

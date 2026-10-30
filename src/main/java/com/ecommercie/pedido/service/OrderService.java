@@ -71,7 +71,7 @@ public class OrderService {
                 throw new IllegalStateException("O item \"" + v.getProduct().getNome()
                         + "\" não está mais disponível; remova-o do carrinho");
             }
-            inventoryService.reservarItem(v.getProduct().getId(), item.getQuantidade());
+            inventoryService.reservarItem(v.getId(), item.getQuantidade());
             OrderItem orderItem = OrderItem.builder()
                     .order(order)
                     .product(v.getProduct())
@@ -219,8 +219,8 @@ public class OrderService {
     private void cancelarEDevolver(Order order) {
         order.markCancelado();
         for (OrderItem item : order.getItens()) {
-            if (item.getProduct() != null) {
-                inventoryService.devolverReserva(item.getProduct().getId(), item.getQuantidade());
+            if (item.getVariant() != null) {
+                inventoryService.devolverReserva(item.getVariant().getId(), item.getQuantidade());
             }
         }
         notificarCliente(order, OutboxTypes.EMAIL_PEDIDO_CANCELADO);

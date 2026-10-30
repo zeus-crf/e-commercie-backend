@@ -183,7 +183,7 @@ class OrderFlowTest {
                                 .andExpect(jsonPath("$.data.uf").exists());
 
                 assertThat(orderRepository.findAll()).isEmpty();
-                assertThat(inventoryItemRepository.findByProductId(variant.productId()).orElseThrow().getReservada())
+                assertThat(inventoryItemRepository.findByVariantId(variant.variantId()).orElseThrow().getReservada())
                                 .isZero();
         }
 
@@ -203,7 +203,7 @@ class OrderFlowTest {
                                                 "CEP 01000000 não encontrado. Confira o CEP do endereço de entrega."));
 
                 assertThat(orderRepository.findAll()).isEmpty();
-                assertThat(inventoryItemRepository.findByProductId(v.productId()).orElseThrow().getReservada())
+                assertThat(inventoryItemRepository.findByVariantId(v.variantId()).orElseThrow().getReservada())
                                 .isZero();
         }
 
@@ -253,7 +253,7 @@ class OrderFlowTest {
                                 .andExpect(jsonPath("$.data.endereco.cidade").value("Sao Paulo"));
 
                 // estoque foi RESERVADO, não baixado
-                var inv = inventoryItemRepository.findByProductId(v.productId()).orElseThrow();
+                var inv = inventoryItemRepository.findByVariantId(v.variantId()).orElseThrow();
                 assertThat(inv.getReservada()).isEqualTo(3);
                 assertThat(inv.getDisponivel()).isEqualTo(10); // físico intacto
 
@@ -335,7 +335,7 @@ class OrderFlowTest {
                 Order depois = orderRepository.findById(orderId).orElseThrow();
                 assertThat(depois.getStatus()).isEqualTo(StatusOrder.CANCELADO);
 
-                var inv = inventoryItemRepository.findByProductId(v.productId()).orElseThrow();
+                var inv = inventoryItemRepository.findByVariantId(v.variantId()).orElseThrow();
                 assertThat(inv.getReservada()).isZero(); // reserva liberada
                 assertThat(inv.getDisponivel()).isEqualTo(10); // físico nunca saiu
 
@@ -468,7 +468,7 @@ class OrderFlowTest {
         void checkout_guardaTamanhoCorEPrecoDaVariacao() throws Exception {
                 Cookie cli = clienteCookie("a@test.com");
                 var base = produtoComEstoque("Camiseta", "100.00", 10);
-                var m = catalogo.variacao(base, "M", "Azul", "55.00");
+                var m = catalogo.variacao(base, "M", "Azul", "55.00", 10);
                 addAoCarrinho(cli, m.getId(), 3);
 
                 mockMvc.perform(post("/api/v1/orders").cookie(cli)

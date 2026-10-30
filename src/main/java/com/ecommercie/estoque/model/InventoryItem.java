@@ -1,6 +1,6 @@
 package com.ecommercie.estoque.model;
 
-import com.ecommercie.catalogo.models.Product;
+import com.ecommercie.catalogo.models.ProductVariant;
 import com.ecommercie.shared.BaseEntity;
 import jakarta.persistence.*;
 import lombok.*;
@@ -15,8 +15,8 @@ import lombok.*;
 public class InventoryItem extends BaseEntity {
 
     @OneToOne
-    @JoinColumn(name = "product_id", nullable = false, unique = true)
-    private Product product;
+    @JoinColumn(name = "variant_id", nullable = false, unique = true)
+    private ProductVariant variant;
 
     @Column(nullable = false)
     @Builder.Default

@@ -1,7 +1,7 @@
 package com.ecommercie.estoque.service;
 
-import com.ecommercie.catalogo.models.Product;
-import com.ecommercie.catalogo.repository.ProductRepository;
+import com.ecommercie.catalogo.models.ProductVariant;
+import com.ecommercie.catalogo.repository.ProductVariantRepository;
 import com.ecommercie.estoque.model.InventoryItem;
 import com.ecommercie.estoque.repository.InventoryItemRepository;
 import jakarta.persistence.EntityNotFoundException;
@@ -14,11 +14,11 @@ import org.springframework.transaction.annotation.Transactional;
 public class InventoryService {
 
     private final InventoryItemRepository inventoryItemRepository;
-    private final ProductRepository productRepository;
+    private final ProductVariantRepository variantRepository;
 
     @Transactional
-    public void reservarItem(String productId, int qtd) {
-        var item = inventoryItemRepository.lockForUpdate(productId)
+    public void reservarItem(String variantId, int qtd) {
+        var item = inventoryItemRepository.lockForUpdate(variantId)
                 .orElseThrow(() -> new EntityNotFoundException("Este produto não existe"));
 
         if (item.getDisponivel() - item.getReservada() < qtd ) {
@@ -30,8 +30,8 @@ public class InventoryService {
 
 
     @Transactional
-    public void confirmarBaixa(String productId, int qtd) {
-        var item = inventoryItemRepository.lockForUpdate(productId)
+    public void confirmarBaixa(String variantId, int qtd) {
+        var item = inventoryItemRepository.lockForUpdate(variantId)
                 .orElseThrow(() -> new EntityNotFoundException("Este produto não foi encontrado"));
 
         if (item.getReservada() < qtd) {
@@ -44,8 +44,8 @@ public class InventoryService {
     }
 
     @Transactional
-    public void estornarBaixa(String productId, int qtd) {
-        var item = inventoryItemRepository.lockForUpdate(productId)
+    public void estornarBaixa(String variantId, int qtd) {
+        var item = inventoryItemRepository.lockForUpdate(variantId)
                 .orElseThrow(() -> new EntityNotFoundException("Produto não encontrado"));
 
 
@@ -54,8 +54,8 @@ public class InventoryService {
 
 
     @Transactional
-    public void devolverReserva(String productId, int qtd) {
-        var item = inventoryItemRepository.lockForUpdate(productId)
+    public void devolverReserva(String variantId, int qtd) {
+        var item = inventoryItemRepository.lockForUpdate(variantId)
                 .orElseThrow(() -> new EntityNotFoundException("Esse produto não foi encontrado"));
 
         if (item.getReservada() < qtd) {
@@ -67,9 +67,9 @@ public class InventoryService {
     }
 
     @Transactional
-    public void criarZerado(Product product) {
+    public void criarZerado(ProductVariant variant) {
         InventoryItem item = InventoryItem.builder()
-                .product(product)
+                .variant(variant)
                 .disponivel(0)
                 .reservada(0)
                 .build();
@@ -78,15 +78,15 @@ public class InventoryService {
     }
 
     @Transactional
-    public void ajustarEstoque(String productId, int estoque) {
-        var item = inventoryItemRepository.findByProductId(productId)
+    public void ajustarEstoque(String variantId, int estoque) {
+        var item = inventoryItemRepository.findByVariantId(variantId)
                 .orElse(null);
 
         if (item == null) {
-            Product product = productRepository.findById(productId)
-                    .orElseThrow(() -> new EntityNotFoundException("Produto não encontrado"));
+            ProductVariant variant = variantRepository.findById(variantId)
+                    .orElseThrow(() -> new EntityNotFoundException("Variação não encontrada"));
             InventoryItem novo = InventoryItem.builder()
-                    .product(product)
+                    .variant(variant)
                     .disponivel(estoque)
                     .reservada(0)
                     .build();
@@ -104,7 +104,6 @@ public class InventoryService {
     /** Remove o estoque de um produto (usado quando o produto é excluído). */
     @Transactional
     public void removerDoProduto(String productId) {
-        inventoryItemRepository.findByProductId(productId)
-                .ifPresent(inventoryItemRepository::delete);
+        inventoryItemRepository.deleteAll(inventoryItemRepository.findByVariantProductId(productId));
     }
 }

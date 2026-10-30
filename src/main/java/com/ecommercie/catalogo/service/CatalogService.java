@@ -72,7 +72,7 @@ public class CatalogService {
 
         productRepository.save(product);
 
-        inventoryService.criarZerado(product);
+        inventoryService.criarZerado(product.getVariacoes().get(0));
 
         return ProductResponse.from(product);
     }

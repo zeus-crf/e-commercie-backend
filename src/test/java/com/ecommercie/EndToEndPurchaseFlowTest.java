@@ -88,7 +88,7 @@ public class EndToEndPurchaseFlowTest {
         String variantId = JsonPath.read(produtoJson, "$.data.variacoes[0].id");
 
         // produto nasce com estoque 0, admin tem que colocar itens
-        mockMvc.perform(patch("/api/v1/admin/inventory/" + productId)
+        mockMvc.perform(patch("/api/v1/admin/inventory/variants/" + variantId)
                 .cookie(admin).contentType(MediaType.APPLICATION_JSON)
                 .content("""
                             {"disponivel": 10}
