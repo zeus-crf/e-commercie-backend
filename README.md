@@ -146,13 +146,41 @@ A autenticação é por cookie httpOnly — não há token no corpo nem header `
 
 Fluxo de compra, em ordem:
 
-1. Admin cria categoria e produto (`/api/v1/admin/catalog/...`).
-2. Admin define o estoque: `PATCH /api/v1/admin/inventory/{productId}` — o produto nasce com estoque 0.
-3. Cliente adiciona ao carrinho, cota o frete (`POST /api/v1/shipping/quote`) e faz o checkout
-   (`POST /api/v1/orders`).
+1. Admin cria categoria e produto (`/api/v1/admin/catalog/...`), com `variacoes` opcionais (tamanho/cor).
+2. Admin define o estoque **por variação**: `PATCH /api/v1/admin/inventory/variants/{variantId}` — cada
+   variação nasce com estoque 0.
+3. Cliente adiciona ao carrinho uma variação (`variant_id`), cota o frete (`POST /api/v1/shipping/quote`)
+   e faz o checkout (`POST /api/v1/orders`).
 4. Cliente cria a preferência de pagamento (`POST /api/v1/payments/{orderId}/preference`) e paga
    no Mercado Pago. O webhook marca o pedido como `PAGO`.
 5. Admin gera a etiqueta (`POST /api/v1/admin/orders/{id}/label`) e avança o pedido.
+
+### Variações de produto
+
+Um produto (ex.: "Camiseta Básica") é o modelo: nome, descrição, categoria, imagens, dados fiscais e o
+preço/peso/medidas **padrão**. Cada **variação** (P/Azul, M/Azul, G/Preto...) tem o próprio estoque e,
+se quiser, o próprio preço, peso e medidas.
+
+- **Herança:** preço, peso e medidas vazios na variação herdam do produto. O `GET` já devolve os valores
+  efetivos.
+- **Variação "única":** todo produto tem pelo menos uma. Sem `variacoes` no cadastro, nasce uma com
+  `tamanho` e `cor` nulos. Os produtos que já existiam ganharam a sua pelas migrations V20 a V22.
+- **Unicidade:** a combinação (produto, tamanho, cor) é única, e o `sku` também, quando informado.
+  Repetir devolve 409. O tamanho é gravado em maiúsculas (`p` vira `P`).
+- **Desativar, não excluir:** `PUT /api/v1/admin/catalog/variants/{variantId}` com `{"ativo": false}`. A
+  variação some do `GET` público e não vai mais para o carrinho, mas pedidos antigos continuam apontando
+  para ela. A variação "única" **não** é desativada sozinha quando o admin cadastra P/M/G: desative-a.
+- **Endpoints:** `POST /api/v1/admin/catalog/products/{productId}/variants` adiciona uma variação;
+  `PUT .../variants/{variantId}` edita (campo ausente = não mexe).
+- **Carrinho e pedido:** o carrinho recebe `variant_id` (não mais `product_id`). O pedido guarda um retrato
+  de tamanho, cor e SKU no momento da compra.
+- **Cotação de frete:** `POST /api/v1/shipping/quote` não lê o banco. O front deve mandar o peso e as
+  medidas **da variação** (`variacoes[].peso_kg`, `altura_cm`...), que vêm no `GET` do produto.
+- **Etiqueta:** o nome do item no Melhor Envio, no Mercado Pago e na NF-e leva a variação
+  (`Camiseta - M / Azul`). O pedido vai ao ME em **um volume só**: peso somado, maior largura e maior
+  comprimento, altura empilhada. Os Correios recusam mais de um volume por envio.
+- **Mudança na API:** o antigo `PATCH /api/v1/admin/inventory/{productId}` foi removido; use o das
+  variações.
 
 ### CPF/CNPJ do cliente
 
