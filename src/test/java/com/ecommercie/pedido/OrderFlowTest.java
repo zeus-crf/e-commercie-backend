@@ -159,7 +159,7 @@ class OrderFlowTest {
         }
 
         @Test
-        void checkout_carrinhoVazio_retorna400() throws Exception {
+        void checkout_carrinhoVazio_retorna422() throws Exception {
                 Cookie cli = clienteCookie("a@test.com");
                 mockMvc.perform(post("/api/v1/orders").cookie(cli)
                                 .contentType(MediaType.APPLICATION_JSON).content(ENDERECO))
