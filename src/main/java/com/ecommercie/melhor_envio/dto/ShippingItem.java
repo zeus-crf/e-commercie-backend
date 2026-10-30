@@ -7,6 +7,7 @@ public record ShippingItem(
         BigDecimal alturaCm,
         BigDecimal larguraCm,
         BigDecimal comprimentoCm,
-        int quantidade
+        int quantidade,
+        BigDecimal precoUnitario   // opcional: com ele a cotacao ja considera o seguro
 ) {
 }

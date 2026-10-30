@@ -21,6 +21,13 @@ public record EtiquetaRequest(
         DocumentoFiscal documentoFiscal   // null quando nao ha NF-e/DC-e com chave
 ) {
 
+    /** Valor declarado ao ME: soma de preco x quantidade de todos os itens do pedido. */
+    public BigDecimal valorSegurado() {
+        return itens.stream()
+                .map(i -> i.precoUnitario().multiply(BigDecimal.valueOf(i.quantidade())))
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
     public record Destinatario(String nome, String email, String documento, String cep, String logradouro,
                                String numero, String bairro, String cidade, String uf) {}
 

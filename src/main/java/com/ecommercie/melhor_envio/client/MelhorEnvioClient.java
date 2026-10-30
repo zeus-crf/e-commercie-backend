@@ -81,7 +81,8 @@ public class MelhorEnvioClient implements ShippingProvider {
         CalculePayload payload = new CalculePayload(
                 new CalculePayload.PostalCode(from),
                 new CalculePayload.PostalCode(request.cepDestino()),
-                products
+                products,
+                request.valorSegurado() != null ? new CalculePayload.Options(request.valorSegurado()) : null
         );
 
         List<MeCalculateResponse> raw = restClient.post()
@@ -121,18 +122,13 @@ public class MelhorEnvioClient implements ShippingProvider {
         // um volume so: os Correios recusam envio com mais de um (ex.: P e G do mesmo pedido)
         List<MeCartRequest.MeVolume> volumes = List.of(MeCartRequest.MeVolume.agrupando(request.itens()));
 
-        BigDecimal insuranceValue = request.itens().stream()
-                .map(i -> i.precoUnitario().multiply(BigDecimal.valueOf(i.quantidade())))
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-
         MeCartRequest requestCart = new MeCartRequest(
                 request.serviceId(),
                 remetente,
                 to,
                 products,
                 volumes,
-                insuranceValue.compareTo(BigDecimal.ZERO) > 0 ? insuranceValue : null,
-                opcoesFiscais(request.documentoFiscal())
+                opcoes(request)
         );
 
         try {
@@ -251,14 +247,23 @@ public class MelhorEnvioClient implements ShippingProvider {
     }
 
     // DC-e vai em options.dce.key; NF-e em options.invoice.key.
-    private MeCartRequest.MeOptions opcoesFiscais(EtiquetaRequest.DocumentoFiscal documento) {
-        if (documento == null) {
+    private MeCartRequest.MeOptions opcoes(EtiquetaRequest request) {
+        BigDecimal seguro = request.valorSegurado();
+        BigDecimal valorSegurado = seguro.signum() > 0 ? seguro : null;
+        var documento = request.documentoFiscal();
+
+        MeCartRequest.MeOptions.MeInvoice invoice = null;
+        MeCartRequest.MeOptions.MeDce dce = null;
+        if (documento != null) {
+            switch (documento.tipo()) {
+                case DCE -> dce = new MeCartRequest.MeOptions.MeDce(documento.chave());
+                case NFE -> invoice = new MeCartRequest.MeOptions.MeInvoice(documento.chave());
+                default -> { }
+            }
+        }
+        if (valorSegurado == null && invoice == null && dce == null) {
             return null;
         }
-        return switch (documento.tipo()) {
-            case DCE -> new MeCartRequest.MeOptions(null, new MeCartRequest.MeOptions.MeDce(documento.chave()));
-            case NFE -> new MeCartRequest.MeOptions(new MeCartRequest.MeOptions.MeInvoice(documento.chave()), null);
-            default -> null;
-        };
+        return new MeCartRequest.MeOptions(valorSegurado, invoice, dce);
     }
 }

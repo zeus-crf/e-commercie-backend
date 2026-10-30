@@ -175,7 +175,12 @@ se quiser, o próprio preço, peso e medidas.
 - **Carrinho e pedido:** o carrinho recebe `variant_id` (não mais `product_id`). O pedido guarda um retrato
   de tamanho, cor e SKU no momento da compra.
 - **Cotação de frete:** `POST /api/v1/shipping/quote` não lê o banco. O front deve mandar o peso e as
-  medidas **da variação** (`variacoes[].peso_kg`, `altura_cm`...), que vêm no `GET` do produto.
+  medidas **da variação** (`variacoes[].peso_kg`, `altura_cm`...) e o `precoUnitario` de cada item, que
+  vêm no `GET` do produto. Com o preço, a cotação já inclui o **seguro** (valor declarado), igual ao da
+  etiqueta. Sem `precoUnitario` em nenhum item, a cotação sai sem seguro e o frete cobrado da loja pode
+  ficar maior que o cotado.
+- **Valor segurado:** a etiqueta declara ao ME a soma de preço × quantidade de todos os itens, em
+  `options.insurance_value` do carrinho do ME.
 - **Etiqueta:** o nome do item no Melhor Envio, no Mercado Pago e na NF-e leva a variação
   (`Camiseta - M / Azul`). O pedido vai ao ME em **um volume só**: peso somado, maior largura e maior
   comprimento, altura empilhada. Os Correios recusam mais de um volume por envio.
