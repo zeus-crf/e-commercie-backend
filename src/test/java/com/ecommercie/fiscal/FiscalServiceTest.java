@@ -4,6 +4,7 @@ import com.ecommercie.TestcontainersConfiguration;
 import com.ecommercie.carrinho.repository.CartRepository;
 import com.ecommercie.catalogo.models.Category;
 import com.ecommercie.catalogo.models.Product;
+import com.ecommercie.catalogo.models.ProductVariant;
 import com.ecommercie.catalogo.repository.CategoryRepository;
 import com.ecommercie.catalogo.repository.ProductRepository;
 import com.ecommercie.estoque.model.InventoryItem;
@@ -85,7 +86,8 @@ class FiscalServiceTest {
                 .ativo(true)
                 .build());
 
-        Product produto = catalogo.produto("Camiseta preta P", "150.00", 10).product();
+        var item = catalogo.produto("Camiseta preta P", "150.00", 10);
+        Product produto = item.product();
 
         Address endereco = Address.builder()
                 .logradouro("Rua das Flores")
@@ -115,6 +117,7 @@ class FiscalServiceTest {
         pedido.getItens().add(OrderItem.builder()
                 .order(pedido)
                 .product(produto)
+                .variant(item.variacao())
                 .nomeProduto(produto.getNome())
                 .precoUnitario(produto.getPreco())
                 .quantidade(2)

@@ -5,7 +5,6 @@ import com.ecommercie.pedido.cep.ConsultaCep;
 import com.ecommercie.pedido.cep.ResultadoCep;
 import com.ecommercie.carrinho.repository.CartRepository;
 import com.ecommercie.catalogo.models.Category;
-import com.ecommercie.catalogo.models.Product;
 import com.ecommercie.catalogo.repository.CategoryRepository;
 import com.ecommercie.catalogo.repository.ProductRepository;
 import com.ecommercie.estoque.model.InventoryItem;
@@ -117,14 +116,14 @@ class ReturnFlowTest {
                 .andReturn().getResponse().getCookie("access_token");
     }
 
-    private Product produtoComEstoque(String nome, int estoque) {
-        return catalogo.produto(nome, "100.00", estoque).product();
+    private CatalogoDeTeste.Item produtoComEstoque(String nome, int estoque) {
+        return catalogo.produto(nome, "100.00", estoque);
     }
 
-    private void addAoCarrinho(Cookie cookie, String productId, int qtd) throws Exception {
+    private void addAoCarrinho(Cookie cookie, String variantId, int qtd) throws Exception {
         mockMvc.perform(post("/api/v1/cart/items").cookie(cookie)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"product_id\":\"%s\",\"quantidade\":%d}".formatted(productId, qtd)))
+                        .content("{\"variant_id\":\"%s\",\"quantidade\":%d}".formatted(variantId, qtd)))
                 .andExpect(status().isOk());
     }
 
@@ -159,8 +158,8 @@ class ReturnFlowTest {
     @Test
     void solicitarDevolucao_pedidoPago_transicionaParaDevolucaoSolicitada() throws Exception {
         Cookie cli = clienteCookie("a@test.com");
-        Product p = produtoComEstoque("Camiseta", 10);
-        addAoCarrinho(cli, p.getId(), 2);
+        var p = produtoComEstoque("Camiseta", 10);
+        addAoCarrinho(cli, p.variantId(), 2);
         String orderId = checkout(cli);
         simularPagamento(orderId);
 
@@ -187,8 +186,8 @@ class ReturnFlowTest {
     @Test
     void solicitarDevolucao_pedidoAguardandoPagamento_retorna400() throws Exception {
         Cookie cli = clienteCookie("a@test.com");
-        Product p = produtoComEstoque("Camiseta", 10);
-        addAoCarrinho(cli, p.getId(), 1);
+        var p = produtoComEstoque("Camiseta", 10);
+        addAoCarrinho(cli, p.variantId(), 1);
         String orderId = checkout(cli);
         // pedido nasce AGUARDANDO_PAGAMENTO — devolução inválida
 
@@ -203,8 +202,8 @@ class ReturnFlowTest {
     void solicitarDevolucao_pedidoDeOutroCliente_retorna404() throws Exception {
         Cookie clienteA = clienteCookie("a@test.com");
         Cookie clienteB = clienteCookie("b@test.com");
-        Product p = produtoComEstoque("Camiseta", 10);
-        addAoCarrinho(clienteA, p.getId(), 1);
+        var p = produtoComEstoque("Camiseta", 10);
+        addAoCarrinho(clienteA, p.variantId(), 1);
         String orderIdA = checkout(clienteA);
         simularPagamento(orderIdA);
 
@@ -222,12 +221,12 @@ class ReturnFlowTest {
     void confirmarDevolucao_estornaEstoqueEMarcaDevolvido() throws Exception {
         Cookie admin = adminCookie("admin@test.com");
         Cookie cli = clienteCookie("cli@test.com");
-        Product p = produtoComEstoque("Camiseta", 10);
-        addAoCarrinho(cli, p.getId(), 3);
+        var p = produtoComEstoque("Camiseta", 10);
+        addAoCarrinho(cli, p.variantId(), 3);
         String orderId = checkout(cli);
 
         // simula estoque confirmado (como o webhook faria)
-        InventoryItem inv = inventoryItemRepository.findByProductId(p.getId()).orElseThrow();
+        InventoryItem inv = inventoryItemRepository.findByProductId(p.productId()).orElseThrow();
         inv.setReservada(0);
         inv.setDisponivel(7); // 10 - 3 baixados
         inventoryItemRepository.save(inv);
@@ -244,7 +243,7 @@ class ReturnFlowTest {
         assertThat(order.getRefundedAt()).isNotNull();
 
         // estoque foi reabastecido
-        InventoryItem invDepois = inventoryItemRepository.findByProductId(p.getId()).orElseThrow();
+        InventoryItem invDepois = inventoryItemRepository.findByProductId(p.productId()).orElseThrow();
         assertThat(invDepois.getDisponivel()).isEqualTo(10); // 7 + 3 devolvidos
     }
 
@@ -252,8 +251,8 @@ class ReturnFlowTest {
     void confirmarDevolucao_pedidoSemDevolucaoSolicitada_retorna400() throws Exception {
         Cookie admin = adminCookie("admin@test.com");
         Cookie cli = clienteCookie("cli@test.com");
-        Product p = produtoComEstoque("Camiseta", 10);
-        addAoCarrinho(cli, p.getId(), 1);
+        var p = produtoComEstoque("Camiseta", 10);
+        addAoCarrinho(cli, p.variantId(), 1);
         String orderId = checkout(cli);
         simularPagamento(orderId); // pedido está PAGO, não DEVOLUCAO_SOLICITADA
 
@@ -265,8 +264,8 @@ class ReturnFlowTest {
     @Test
     void confirmarDevolucao_semAdmin_retorna403() throws Exception {
         Cookie cli = clienteCookie("cli@test.com");
-        Product p = produtoComEstoque("Camiseta", 10);
-        addAoCarrinho(cli, p.getId(), 1);
+        var p = produtoComEstoque("Camiseta", 10);
+        addAoCarrinho(cli, p.variantId(), 1);
         String orderId = checkout(cli);
         simularDevolucaoSolicitada(orderId);
 
@@ -278,8 +277,8 @@ class ReturnFlowTest {
     void confirmarDevolucao_pedidoSemDevolucaoSolicitada_naoEstornaNoMercadoPago() throws Exception {
         Cookie admin = adminCookie("admin@test.com");
         Cookie cli = clienteCookie("cli@test.com");
-        Product p = produtoComEstoque("Camiseta", 10);
-        addAoCarrinho(cli, p.getId(), 1);
+        var p = produtoComEstoque("Camiseta", 10);
+        addAoCarrinho(cli, p.variantId(), 1);
         String orderId = checkout(cli);
         simularPagamento(orderId); // PAGO: o cliente nao pediu devolucao
 
@@ -295,8 +294,8 @@ class ReturnFlowTest {
     void confirmarDevolucao_estornaForaDeTransacao_comChaveDeIdempotenciaDoPedido() throws Exception {
         Cookie admin = adminCookie("admin@test.com");
         Cookie cli = clienteCookie("cli@test.com");
-        Product p = produtoComEstoque("Camiseta", 10);
-        addAoCarrinho(cli, p.getId(), 1);
+        var p = produtoComEstoque("Camiseta", 10);
+        addAoCarrinho(cli, p.variantId(), 1);
         String orderId = checkout(cli);
         simularDevolucaoSolicitada(orderId);
         List<Boolean> transacaoAtiva = new ArrayList<>();
@@ -318,11 +317,11 @@ class ReturnFlowTest {
     void confirmarDevolucao_mercadoPagoFora_naoMarcaDevolvido_eORetryUsaAMesmaChave() throws Exception {
         Cookie admin = adminCookie("admin@test.com");
         Cookie cli = clienteCookie("cli@test.com");
-        Product p = produtoComEstoque("Camiseta", 10);
-        addAoCarrinho(cli, p.getId(), 2);
+        var p = produtoComEstoque("Camiseta", 10);
+        addAoCarrinho(cli, p.variantId(), 2);
         String orderId = checkout(cli);
         simularDevolucaoSolicitada(orderId);
-        int disponivelAntes = inventoryItemRepository.findByProductId(p.getId()).orElseThrow().getDisponivel();
+        int disponivelAntes = inventoryItemRepository.findByProductId(p.productId()).orElseThrow().getDisponivel();
         when(paymentRefundClient.refund(anyLong(), any(MPRequestOptions.class)))
                 .thenThrow(new MPException("timeout"))
                 .thenReturn(null);
@@ -333,7 +332,7 @@ class ReturnFlowTest {
         Order depoisDaFalha = orderRepository.findById(orderId).orElseThrow();
         assertThat(depoisDaFalha.getStatus()).isEqualTo(StatusOrder.DEVOLUCAO_SOLICITADA);
         assertThat(depoisDaFalha.getRefundedAt()).isNull();
-        assertThat(inventoryItemRepository.findByProductId(p.getId()).orElseThrow().getDisponivel()).isEqualTo(disponivelAntes);
+        assertThat(inventoryItemRepository.findByProductId(p.productId()).orElseThrow().getDisponivel()).isEqualTo(disponivelAntes);
 
         mockMvc.perform(patch("/api/v1/admin/orders/" + orderId + "/return/confirm").cookie(admin))
                 .andExpect(status().isOk());
@@ -343,6 +342,6 @@ class ReturnFlowTest {
         assertThat(opcoes.getAllValues()).extracting(o -> o.getCustomHeaders().get("X-Idempotency-Key"))
                 .containsExactly("estorno-" + orderId, "estorno-" + orderId);
         assertThat(orderRepository.findById(orderId).orElseThrow().getStatus()).isEqualTo(StatusOrder.DEVOLVIDO);
-        assertThat(inventoryItemRepository.findByProductId(p.getId()).orElseThrow().getDisponivel()).isEqualTo(disponivelAntes + 2);
+        assertThat(inventoryItemRepository.findByProductId(p.productId()).orElseThrow().getDisponivel()).isEqualTo(disponivelAntes + 2);
     }
 }

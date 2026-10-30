@@ -2,7 +2,6 @@ package com.ecommercie.mercado_pago;
 
 import com.ecommercie.TestcontainersConfiguration;
 import com.ecommercie.catalogo.models.Category;
-import com.ecommercie.catalogo.models.Product;
 import com.ecommercie.catalogo.repository.CategoryRepository;
 import com.ecommercie.catalogo.repository.ProductRepository;
 import com.ecommercie.estoque.model.InventoryItem;
@@ -147,11 +146,11 @@ class PreferenceFlowTest {
 
     /** Pedido AGUARDANDO_PAGAMENTO com 2 camisetas de R$ 50. */
     private String pedido(Cookie cli) throws Exception {
-        Product p = catalogo.produto("Camiseta", "Camiseta de algodao", "50.00", 10, 0).product();
+        var p = catalogo.produto("Camiseta", "Camiseta de algodao", "50.00", 10, 0);
 
         mockMvc.perform(post("/api/v1/cart/items").cookie(cli)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"product_id\":\"%s\",\"quantidade\":2}".formatted(p.getId())))
+                        .content("{\"variant_id\":\"%s\",\"quantidade\":2}".formatted(p.variantId())))
                 .andExpect(status().isOk());
         String json = mockMvc.perform(post("/api/v1/orders").cookie(cli)
                         .contentType(MediaType.APPLICATION_JSON).content(ENDERECO))

@@ -5,8 +5,8 @@ import com.ecommercie.carrinho.dto.CartResponse;
 import com.ecommercie.carrinho.model.Cart;
 import com.ecommercie.carrinho.model.CartItem;
 import com.ecommercie.carrinho.repository.CartRepository;
-import com.ecommercie.catalogo.models.Product;
-import com.ecommercie.catalogo.repository.ProductRepository;
+import com.ecommercie.catalogo.models.ProductVariant;
+import com.ecommercie.catalogo.repository.ProductVariantRepository;
 import com.ecommercie.estoque.repository.InventoryItemRepository;
 import com.ecommercie.security.models.User;
 import jakarta.persistence.EntityNotFoundException;
@@ -21,9 +21,8 @@ import java.util.Optional;
 public class CartService {
 
     private final CartRepository cartRepository;
-    private final ProductRepository productRepository;
     private final InventoryItemRepository inventoryItemRepository;
-
+    private final ProductVariantRepository variantRepository;
 
     @Transactional
     public CartResponse getOrCreate(User user) {
@@ -31,7 +30,7 @@ public class CartService {
         Cart carrinho = cartRepository.findByUserId(user.getId())
                 .orElseGet(() -> cartRepository.save(
                         Cart.builder().user(user).build()));
-        
+
         return CartResponse.from(carrinho);
     }
 
@@ -40,14 +39,18 @@ public class CartService {
 
         var carrinho = buscarCarrinho(user);
 
-        Product product = productRepository.findById(request.product_id())
-                .orElseThrow(() -> new EntityNotFoundException("Esse produto não existe"));
+        ProductVariant variant = variantRepository.findById(request.variant_id())
+                .orElseThrow(() -> new EntityNotFoundException("Essa variação de produto não existe"));
 
-        var estoque = inventoryItemRepository.findByProductId(product.getId())
+        if (!variant.isAtivo() || !variant.getProduct().isAtivo()) {
+            throw new IllegalArgumentException("Esta variação do produto não está disponível");
+        }
+
+        var estoque = inventoryItemRepository.findByProductId(variant.getProduct().getId())
                 .orElseThrow(() -> new EntityNotFoundException("Estoque não encontrado para o produto"));
 
         Optional<CartItem> existente = carrinho.getItens().stream()
-                .filter(i -> i.getProduct().getId().equals(product.getId()))
+                .filter(i -> i.getVariant().getId().equals(variant.getId()))
                 .findFirst();
 
         int quantidadeTotal = request.quantidade() + existente.map(CartItem::getQuantidade).orElse(0);
@@ -61,28 +64,32 @@ public class CartService {
         } else {
             carrinho.getItens().add(CartItem.builder()
                     .cart(carrinho)
-                    .product(product)
+                    .variant(variant)
                     .quantidade(request.quantidade())
-                    .build() );
+                    .build());
         }
 
-        // flush: garante o INSERT (e o id via @PrePersist) do item novo antes de montar a resposta
+        // flush: garante o INSERT (e o id via @PrePersist) do item novo antes de montar
+        // a resposta
         cartRepository.saveAndFlush(carrinho);
 
         return CartResponse.from(carrinho);
 
     }
 
-
     @Transactional
-    public CartResponse editItem (User user, CartItemRequest request) {
+    public CartResponse editItem(User user, CartItemRequest request) {
 
         var carrinho = buscarCarrinho(user);
 
-        Product product = productRepository.findById(request.product_id())
-                .orElseThrow(() -> new EntityNotFoundException("Esse produto não existe"));
+        ProductVariant variant = variantRepository.findById(request.variant_id())
+                .orElseThrow(() -> new EntityNotFoundException("Essa variação de produto não existe"));
 
-        var estoque = inventoryItemRepository.findByProductId(product.getId())
+        if (!variant.isAtivo() || !variant.getProduct().isAtivo()) {
+            throw new IllegalArgumentException("Esta variação do produto não está disponível");
+        }
+
+        var estoque = inventoryItemRepository.findByProductId(variant.getProduct().getId())
                 .orElseThrow(() -> new EntityNotFoundException("Estoque não encontrado para o produto"));
 
         int disponivel = estoque.getDisponivel() - estoque.getReservada();
@@ -91,18 +98,17 @@ public class CartService {
         }
 
         Optional<CartItem> existente = carrinho.getItens().stream()
-                .filter(i -> i.getProduct().getId().equals(product.getId()))
+                .filter(i -> i.getVariant().getId().equals(variant.getId()))
                 .findFirst();
 
         if (existente.isPresent()) {
             existente.get().setQuantidade(request.quantidade());
         } else {
-            throw new EntityNotFoundException("Produto não encontrado");
+            throw new EntityNotFoundException("Essa variação de produto não está no carrinho");
         }
 
         return CartResponse.from(carrinho);
     }
-
 
     @Transactional
     public CartResponse removeItem(User user, String itemId) {
@@ -120,8 +126,6 @@ public class CartService {
 
         return CartResponse.from(carrinho);
     }
-
-
 
     private Cart buscarCarrinho(User user) {
         return cartRepository.findByUserId(user.getId())

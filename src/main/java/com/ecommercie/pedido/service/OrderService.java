@@ -2,6 +2,7 @@ package com.ecommercie.pedido.service;
 
 import com.ecommercie.carrinho.model.CartItem;
 import com.ecommercie.carrinho.repository.CartRepository;
+import com.ecommercie.catalogo.models.ProductVariant;
 import com.ecommercie.estoque.service.InventoryService;
 import com.ecommercie.outbox.OutboxTypes;
 import com.ecommercie.outbox.dispatcher.OutboxDispatcher;
@@ -47,10 +48,10 @@ public class OrderService {
         }
         Order order = new Order();
         var carrinho = cartRepository.findByUserId(user.getId())
-                .orElseThrow(() -> new IllegalArgumentException("Carrinho não encontrado"));
+                .orElseThrow(() -> new IllegalStateException("Carrinho não encontrado"));
 
         if (carrinho.getItens().isEmpty()){
-            throw new IllegalArgumentException("O carrinho está vazio");
+            throw new IllegalStateException("O carrinho está vazio");
         }
 
         Address address = new Address(
@@ -65,12 +66,21 @@ public class OrderService {
         List<OrderItem> orderItemList = new ArrayList<>();
 
         for (CartItem item : carrinho.getItens()) {
-            inventoryService.reservarItem(item.getProduct().getId(), item.getQuantidade());
+            ProductVariant v = item.getVariant();
+            if (!v.isAtivo() || !v.getProduct().isAtivo()){
+                throw new IllegalStateException("O item \"" + v.getProduct().getNome()
+                        + "\" não está mais disponível; remova-o do carrinho");
+            }
+            inventoryService.reservarItem(v.getProduct().getId(), item.getQuantidade());
             OrderItem orderItem = OrderItem.builder()
                     .order(order)
-                    .product(item.getProduct())
-                    .nomeProduto(item.getProduct().getNome())
-                    .precoUnitario(item.getProduct().getPreco())  
+                    .product(v.getProduct())
+                    .variant(v)
+                    .nomeProduto(v.getProduct().getNome())
+                    .tamanho(v.getTamanho())
+                    .cor(v.getCor())
+                    .sku(v.getSku())
+                    .precoUnitario(v.precoEfetivo())
                     .quantidade(item.getQuantidade())
                     .build();
             orderItemList.add(orderItem);

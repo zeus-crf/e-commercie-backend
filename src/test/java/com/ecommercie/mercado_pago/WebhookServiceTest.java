@@ -4,6 +4,7 @@ import com.ecommercie.TestcontainersConfiguration;
 import com.ecommercie.carrinho.repository.CartRepository;
 import com.ecommercie.catalogo.models.Category;
 import com.ecommercie.catalogo.models.Product;
+import com.ecommercie.catalogo.models.ProductVariant;
 import com.ecommercie.catalogo.repository.CategoryRepository;
 import com.ecommercie.catalogo.repository.ProductRepository;
 import com.ecommercie.estoque.model.InventoryItem;
@@ -185,7 +186,8 @@ class WebhookServiceTest {
                 .build());
 
         // estado pos-checkout: 2 unidades reservadas
-        Product produto = catalogo.produto("Camiseta preta P", null, "150.00", 10, 2).product();
+        var item = catalogo.produto("Camiseta preta P", null, "150.00", 10, 2);
+        Product produto = item.product();
 
         Order pedido = Order.builder()
                 .user(user)
@@ -199,6 +201,7 @@ class WebhookServiceTest {
 
         pedido.getItens().add(OrderItem.builder()
                 .order(pedido).product(produto)
+                        .variant(item.variacao())
                 .nomeProduto(produto.getNome())
                 .precoUnitario(produto.getPreco())
                 .quantidade(2)

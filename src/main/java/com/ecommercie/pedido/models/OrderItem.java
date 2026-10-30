@@ -1,6 +1,7 @@
 package com.ecommercie.pedido.models;
 
 import com.ecommercie.catalogo.models.Product;
+import com.ecommercie.catalogo.models.ProductVariant;
 import com.ecommercie.shared.BaseEntity;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
@@ -26,6 +27,16 @@ public class OrderItem extends BaseEntity {
     @JoinColumn(name = "product_id")
     private Product product;
 
+    @ManyToOne
+    @JoinColumn(name = "variant_id")
+    private ProductVariant variant;
+
+    private String tamanho;
+
+    private String cor;
+
+    private String sku;
+
     @Column(nullable = false)
     private String nomeProduto;
 
@@ -41,4 +52,11 @@ public class OrderItem extends BaseEntity {
     private String cfop;
 
     private String origem;
+
+    /** "Camiseta - M / Azul" (ou so o nome, na variacao unica). Vai para o ME, o MP e a nota. */
+    public String nomeCompleto() {
+        String d = java.util.stream.Stream.of(tamanho, cor).filter(java.util.Objects::nonNull)
+                .collect(java.util.stream.Collectors.joining(" / "));
+        return d.isEmpty() ? nomeProduto : nomeProduto + " - " + d;
+    }
 }

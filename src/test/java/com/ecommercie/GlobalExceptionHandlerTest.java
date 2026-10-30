@@ -2,7 +2,6 @@ package com.ecommercie;
 
 import com.ecommercie.carrinho.repository.CartRepository;
 import com.ecommercie.catalogo.models.Category;
-import com.ecommercie.catalogo.models.Product;
 import com.ecommercie.catalogo.repository.CategoryRepository;
 import com.ecommercie.catalogo.repository.ProductRepository;
 import com.ecommercie.estoque.model.InventoryItem;
@@ -179,16 +178,16 @@ public class GlobalExceptionHandlerTest {
                 .andReturn().getResponse().getCookie("access_token");
     }
 
-    private Product produtoComEstoque(String nome, String preco, int estoque) {
-        return catalogo.produto(nome, preco, estoque).product();
+    private CatalogoDeTeste.Item produtoComEstoque(String nome, String preco, int estoque) {
+        return catalogo.produto(nome, preco, estoque);
     }
 
     private String pedidoAguardandoPagamento() throws Exception {
         Cookie cli = clienteCookie("cli@test.com");
-        Product p = produtoComEstoque("Camisa", "10", 10);
+        var p = produtoComEstoque("Camisa", "10", 10);
         mockMvc.perform(post("/api/v1/cart/items").cookie(cli)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"product_id\":\"%s\",\"quantidade\":2}".formatted(p.getId())))
+                        .content("{\"variant_id\":\"%s\",\"quantidade\":2}".formatted(p.variantId())))
                 .andExpect(status().isOk());
         String json = mockMvc.perform(post("/api/v1/orders").cookie(cli)
                         .contentType(MediaType.APPLICATION_JSON).content(ENDERECO))

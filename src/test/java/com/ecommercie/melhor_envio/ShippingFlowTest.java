@@ -2,7 +2,6 @@ package com.ecommercie.melhor_envio;
 
 import com.ecommercie.TestcontainersConfiguration;
 import com.ecommercie.catalogo.models.Category;
-import com.ecommercie.catalogo.models.Product;
 import com.ecommercie.catalogo.repository.CategoryRepository;
 import com.ecommercie.catalogo.repository.ProductRepository;
 import com.ecommercie.estoque.model.InventoryItem;
@@ -843,10 +842,10 @@ class ShippingFlowTest {
     /** Cliente compra 2 unidades e o pedido vai direto para PAGO (o webhook do MP é testado no E2E). */
     private String pedidoPago() throws Exception {
         Cookie cli = clienteCookie("cli@test.com");
-        Product p = produtoComEstoque();
+        var p = produtoComEstoque();
         mockMvc.perform(post("/api/v1/cart/items").cookie(cli)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"product_id\":\"%s\",\"quantidade\":2}".formatted(p.getId())))
+                        .content("{\"variant_id\":\"%s\",\"quantidade\":2}".formatted(p.variantId())))
                 .andExpect(status().isOk());
         String json = mockMvc.perform(post("/api/v1/orders").cookie(cli)
                         .contentType(MediaType.APPLICATION_JSON).content(ENDERECO))
@@ -898,7 +897,7 @@ class ShippingFlowTest {
                 .andReturn().getResponse().getCookie("access_token");
     }
 
-    private Product produtoComEstoque() {
-        return catalogo.produto("Camiseta", "50.00", 10).product();
+    private CatalogoDeTeste.Item produtoComEstoque() {
+        return catalogo.produto("Camiseta", "50.00", 10);
     }
 }
