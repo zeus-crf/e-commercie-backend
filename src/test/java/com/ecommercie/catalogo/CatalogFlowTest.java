@@ -13,6 +13,7 @@ import com.ecommercie.security.repository.RefreshTokenRepository;
 import com.ecommercie.security.repository.UserRepository;
 import jakarta.servlet.http.Cookie;
 import com.ecommercie.support.DatabaseCleaner;
+import com.jayway.jsonpath.JsonPath;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -23,6 +24,7 @@ import org.springframework.http.MediaType;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.ResultActions;
 
 import java.math.BigDecimal;
 
@@ -31,6 +33,7 @@ import static org.hamcrest.Matchers.nullValue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -121,6 +124,33 @@ class CatalogFlowTest {
                   "comprimento_cm": 10.0
                 }
                 """.formatted(categoryId, nome);
+    }
+
+    private String productBodyComVariacoes(String categoryId, String nome, String variacoesJson) {
+        return """
+                {
+                  "category_id": "%s",
+                  "nome": "%s",
+                  "preco": 99.90,
+                  "peso_kg": 1.0,
+                  "altura_cm": 10.0,
+                  "largura_cm": 10.0,
+                  "comprimento_cm": 10.0,
+                  "variacoes": %s
+                }
+                """.formatted(categoryId, nome, variacoesJson);
+    }
+
+    private String criarProdutoPelaApi(Cookie admin, String body) throws Exception {
+        return mockMvc.perform(post("/api/v1/admin/catalog/products").cookie(admin)
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+    }
+
+    private ResultActions postVariacao(Cookie admin, String productId, String json) throws Exception {
+        return mockMvc.perform(post("/api/v1/admin/catalog/products/{id}/variants", productId).cookie(admin)
+                .contentType(MediaType.APPLICATION_JSON).content(json));
     }
 
     // ----------------- catálogo público -----------------
@@ -238,5 +268,96 @@ class CatalogFlowTest {
 
         mockMvc.perform(delete("/api/v1/admin/catalog/categories/" + cat.getId()).cookie(admin))
                 .andExpect(status().isBadRequest());   // guard: categoria em uso não pode ser excluída
+    }
+
+    // ----------------- admin: variações -----------------
+
+    @Test
+    void criarProduto_comVariacoes_criaCadaUmaComEstoqueZerado() throws Exception {
+        Category cat = saveCategory("Cat", "cat");
+        Cookie admin = adminCookie("admin@test.com");
+
+        String json = criarProdutoPelaApi(admin, productBodyComVariacoes(cat.getId(), "Camiseta Basica", """
+                [ { "tamanho": "p", "cor": "Azul" },
+                  { "tamanho": "M", "cor": "Azul", "preco": 59.90 } ]
+                """));
+
+        assertThat((Integer) JsonPath.read(json, "$.data.variacoes.length()")).isEqualTo(2);
+        assertThat((String) JsonPath.read(json, "$.data.variacoes[0].tamanho")).isEqualTo("P");   // normalizado
+        assertThat(((Number) JsonPath.read(json, "$.data.variacoes[0].preco")).doubleValue()).isEqualTo(99.90);   // herda
+        assertThat(((Number) JsonPath.read(json, "$.data.variacoes[1].preco")).doubleValue()).isEqualTo(59.90);
+
+        for (int i = 0; i < 2; i++) {
+            String variantId = JsonPath.read(json, "$.data.variacoes[" + i + "].id");
+            assertThat(inventoryItemRepository.findByVariantId(variantId).orElseThrow().getDisponivel()).isZero();
+        }
+    }
+
+    @Test
+    void adicionarVariacao_retorna201_eHerdaPesoDoProduto() throws Exception {
+        Category cat = saveCategory("Cat", "cat");
+        Product p = saveProduct(cat, "Produto", true);   // peso 1.0 kg
+        Cookie admin = adminCookie("admin@test.com");
+
+        postVariacao(admin, p.getId(), "{\"tamanho\": \"G\"}")
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.tamanho").value("G"))
+                .andExpect(jsonPath("$.data.peso_kg").value(1.0));
+    }
+
+    @Test
+    void adicionarVariacaoRepetida_retorna409() throws Exception {
+        Category cat = saveCategory("Cat", "cat");
+        Cookie admin = adminCookie("admin@test.com");
+        String json = criarProdutoPelaApi(admin, productBodyComVariacoes(cat.getId(), "Camiseta",
+                "[ { \"tamanho\": \"P\", \"cor\": \"Azul\" } ]"));
+        String productId = JsonPath.read(json, "$.data.id");
+
+        postVariacao(admin, productId, "{\"tamanho\": \"P\", \"cor\": \"Azul\"}")
+                .andExpect(status().isConflict());
+    }
+
+    @Test
+    void skuRepetido_retorna409() throws Exception {
+        Category cat = saveCategory("Cat", "cat");
+        Product p = saveProduct(cat, "Produto", true);
+        Cookie admin = adminCookie("admin@test.com");
+
+        postVariacao(admin, p.getId(), "{\"tamanho\": \"P\", \"sku\": \"SKU-1\"}")
+                .andExpect(status().isCreated());
+        postVariacao(admin, p.getId(), "{\"tamanho\": \"M\", \"sku\": \"SKU-1\"}")
+                .andExpect(status().isConflict());
+    }
+
+    @Test
+    void desativarVariacao_someDoGetPublico() throws Exception {
+        Category cat = saveCategory("Cat", "cat");
+        Product p = saveProduct(cat, "Produto", true);
+        Cookie admin = adminCookie("admin@test.com");
+        String variacao = postVariacao(admin, p.getId(), "{\"tamanho\": \"G\"}")
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        String variantId = JsonPath.read(variacao, "$.data.id");
+
+        mockMvc.perform(get("/api/v1/catalog/products/{id}", p.getId()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.variacoes.length()").value(1));
+
+        mockMvc.perform(put("/api/v1/admin/catalog/variants/{id}", variantId).cookie(admin)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"ativo\": false}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.ativo").value(false));
+
+        mockMvc.perform(get("/api/v1/catalog/products/{id}", p.getId()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.variacoes.length()").value(0));
+    }
+
+    @Test
+    void variacaoDeProdutoInexistente_retorna404() throws Exception {
+        Cookie admin = adminCookie("admin@test.com");
+
+        postVariacao(admin, "nao-existe", "{\"tamanho\": \"G\"}")
+                .andExpect(status().isNotFound());
     }
 }

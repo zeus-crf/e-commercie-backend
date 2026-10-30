@@ -1,8 +1,10 @@
 package com.ecommercie.catalogo.dtos;
 
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.*;
 
 import java.math.BigDecimal;
+import java.util.List;
 
 public record ProductRequest(
         @NotBlank(message = "A categoria não pode nula")
@@ -31,6 +33,9 @@ public record ProductRequest(
         @NotNull(message = "O comprimento não pode ser nulo")
         @DecimalMin(value = "0.01", message = "O comprimento deve ser maior que 0")
         BigDecimal comprimento_cm,
+
+        @Valid
+        List<VariantRequest> variacoes,
 
         String ncm,
 
