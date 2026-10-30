@@ -4,6 +4,7 @@ import com.ecommercie.TestcontainersConfiguration;
 import com.ecommercie.catalogo.models.Category;
 import com.ecommercie.catalogo.repository.CategoryRepository;
 import com.ecommercie.catalogo.repository.ProductRepository;
+import com.ecommercie.catalogo.repository.ProductVariantRepository;
 import com.ecommercie.estoque.model.InventoryItem;
 import com.ecommercie.estoque.repository.InventoryItemRepository;
 import com.ecommercie.melhor_envio.enums.SituacaoEtiqueta;
@@ -70,6 +71,7 @@ class ShippingFlowTest {
     @Autowired ShipmentTrackingEventRepository shipmentTrackingEventRepository;
     @Autowired OutboxEventRepository outboxEventRepository;
     @Autowired ProductRepository productRepository;
+    @Autowired ProductVariantRepository variantRepository;
     @Autowired CategoryRepository categoryRepository;
     @Autowired InventoryItemRepository inventoryItemRepository;
     @Autowired UserRepository userRepository;
@@ -783,6 +785,25 @@ class ShippingFlowTest {
                 .satisfies(req -> assertThat(req.destinatario().documento()).isEqualTo("12345678909"));
     }
 
+    @Test
+    void etiqueta_usaPesoEMedidasDaVariacao() throws Exception {
+        var base = produtoComEstoque();   // 0,3 kg
+        var g = catalogo.variacao(base, "G", null, null, 10);
+        g.setPesoKg(new BigDecimal("0.8"));
+        variantRepository.save(g);
+        String orderId = pedidoPagoDe(g.getId());
+
+        mockMvc.perform(post("/api/v1/admin/orders/{id}/label", orderId).cookie(adminCookie()))
+                .andExpect(status().isOk());
+
+        assertThat(shippingStub.carrinhos()).singleElement()
+                .satisfies(req -> assertThat(req.itens()).singleElement().satisfies(item -> {
+                    assertThat(item.pesoKg()).isEqualByComparingTo("0.8");
+                    assertThat(item.alturaCm()).isEqualByComparingTo("2");   // herdada do produto
+                    assertThat(item.nome()).isEqualTo("Camiseta - G");
+                }));
+    }
+
     // ----------------- helpers -----------------
 
     private void rastreio(String meOrderId, String statusMe) throws Exception {
@@ -841,11 +862,14 @@ class ShippingFlowTest {
 
     /** Cliente compra 2 unidades e o pedido vai direto para PAGO (o webhook do MP é testado no E2E). */
     private String pedidoPago() throws Exception {
+        return pedidoPagoDe(produtoComEstoque().variantId());
+    }
+
+    private String pedidoPagoDe(String variantId) throws Exception {
         Cookie cli = clienteCookie("cli@test.com");
-        var p = produtoComEstoque();
         mockMvc.perform(post("/api/v1/cart/items").cookie(cli)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"variant_id\":\"%s\",\"quantidade\":2}".formatted(p.variantId())))
+                        .content("{\"variant_id\":\"%s\",\"quantidade\":2}".formatted(variantId)))
                 .andExpect(status().isOk());
         String json = mockMvc.perform(post("/api/v1/orders").cookie(cli)
                         .contentType(MediaType.APPLICATION_JSON).content(ENDERECO))

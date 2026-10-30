@@ -36,9 +36,15 @@ public record EtiquetaRequest(
                 end.getLogradouro(), end.getNumero(), end.getBairro(), end.getCidade(), end.getUf());
 
         var itens = order.getItens().stream()
-                .map(i -> new Item(i.getNomeProduto(), i.getQuantidade(), i.getPrecoUnitario(),
-                        i.getProduct().getPesoKg(), i.getProduct().getLarguraCm(),
-                        i.getProduct().getAlturaCm(), i.getProduct().getComprimentoCm()))
+                .map(i -> {
+                    var v = i.getVariant();
+                    var p = i.getProduct();
+                    return new Item(i.nomeCompleto(), i.getQuantidade(), i.getPrecoUnitario(),
+                            v != null ? v.pesoEfetivo() : p.getPesoKg(),
+                            v != null ? v.larguraEfetiva() : p.getLarguraCm(),
+                            v != null ? v.alturaEfetiva() : p.getAlturaCm(),
+                            v != null ? v.comprimentoEfetivo() : p.getComprimentoCm());
+                })
                 .toList();
 
         var documento = invoice

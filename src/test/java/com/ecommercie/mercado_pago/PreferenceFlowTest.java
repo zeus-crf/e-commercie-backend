@@ -89,6 +89,19 @@ class PreferenceFlowTest {
     }
 
     @Test
+    void preferencia_mandaONomeComAVariacao() throws Exception {
+        Cookie cli = clienteCookie("cli@test.com");
+        var p = catalogo.produto("Camiseta", null, "M", "Azul", "50.00", 10, 0);
+        String orderId = pedidoDe(cli, p.variantId());
+
+        criarPreferencia(orderId, cli).andExpect(status().isOk());
+
+        assertThat(paymentStub.preferencias()).singleElement()
+                .satisfies(req -> assertThat(req.itens()).singleElement()
+                        .satisfies(item -> assertThat(item.nome()).isEqualTo("Camiseta - M / Azul")));
+    }
+
+    @Test
     void pedidoJaPago_recusaSemChamarOMercadoPago() throws Exception {
         Cookie cli = clienteCookie("cli@test.com");
         String orderId = pedido(cli);
@@ -146,11 +159,13 @@ class PreferenceFlowTest {
 
     /** Pedido AGUARDANDO_PAGAMENTO com 2 camisetas de R$ 50. */
     private String pedido(Cookie cli) throws Exception {
-        var p = catalogo.produto("Camiseta", "Camiseta de algodao", "50.00", 10, 0);
+        return pedidoDe(cli, catalogo.produto("Camiseta", "Camiseta de algodao", "50.00", 10, 0).variantId());
+    }
 
+    private String pedidoDe(Cookie cli, String variantId) throws Exception {
         mockMvc.perform(post("/api/v1/cart/items").cookie(cli)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"variant_id\":\"%s\",\"quantidade\":2}".formatted(p.variantId())))
+                        .content("{\"variant_id\":\"%s\",\"quantidade\":2}".formatted(variantId)))
                 .andExpect(status().isOk());
         String json = mockMvc.perform(post("/api/v1/orders").cookie(cli)
                         .contentType(MediaType.APPLICATION_JSON).content(ENDERECO))

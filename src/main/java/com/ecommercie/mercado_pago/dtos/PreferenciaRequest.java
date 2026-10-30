@@ -17,7 +17,7 @@ public record PreferenciaRequest(
     public static PreferenciaRequest from(Order order, RequestPreference request) {
         return new PreferenciaRequest(order.getId(), order.getUser().getNome(), order.getUser().getEmail(),
                 order.getItens().stream()
-                        .map(i -> new Item(i.getId(), i.getNomeProduto(),
+                        .map(i -> new Item(i.getId(), i.nomeCompleto(),
                                 i.getProduct() != null ? i.getProduct().getDescricao() : null,
                                 i.getQuantidade(), i.getPrecoUnitario()))
                         .toList(),
