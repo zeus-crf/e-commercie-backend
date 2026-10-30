@@ -118,11 +118,8 @@ public class MelhorEnvioClient implements ShippingProvider {
                 .map(i -> new MeCartRequest.MeProduct(i.nome(), i.quantidade(), i.precoUnitario()))
                 .toList();
 
-        List<MeCartRequest.MeVolume> volumes = request.itens().stream()
-                .map(i -> new MeCartRequest.MeVolume(
-                        i.pesoKg().multiply(BigDecimal.valueOf(i.quantidade())),
-                        i.larguraCm(), i.alturaCm(), i.comprimentoCm()))
-                .toList();
+        // um volume so: os Correios recusam envio com mais de um (ex.: P e G do mesmo pedido)
+        List<MeCartRequest.MeVolume> volumes = List.of(MeCartRequest.MeVolume.agrupando(request.itens()));
 
         BigDecimal insuranceValue = request.itens().stream()
                 .map(i -> i.precoUnitario().multiply(BigDecimal.valueOf(i.quantidade())))
